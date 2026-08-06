@@ -6,182 +6,322 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1e1e1e);
 
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(15, 12, 20);
+camera.position.set(5, 4, 7);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({
+    antialias: true
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
+renderer.localClippingEnabled = true;
 container.appendChild(renderer.domElement);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-// Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambientLight);
+// Lighting for Realistic Materials
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight1.position.set(10, 20, 10);
+scene.add(dirLight1);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(20, 40, 20);
-scene.add(dirLight);
+const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+dirLight2.position.set(-10, -10, -10);
+scene.add(dirLight2);
 
-const gridHelper = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
 scene.add(gridHelper);
 
+// Dynamic Cross-Section Plane
+const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 2);
+
 // ==========================================
-// 2. MOCK CAD ASSEMBLY CREATION (WITH METADATA)
+// 2. LOAD REALISTIC GLTF ENGINE / CAR MODEL
 // ==========================================
 const partsRegistry = [];
+const loader = new THREE.GLTFLoader();
 
-function createCADComponent(id, geometry, color, supplier, position) {
-  const material = new THREE.MeshStandardMaterial({
-    color: color,
-    roughness: 0.4,
-    metalness: 0.6
-  });
-
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(...position);
-  mesh.name = id;
-
-  // Attach Custom Metadata (Simulating PLM BOM Attributes)
-  mesh.userData = {
-    partId: id,
-    supplier: supplier,
-    originalColor: color,
-    originalVisibility: true
-  };
-
-  scene.add(mesh);
-  partsRegistry.push(mesh);
-}
-
-// Build Mock Assembly with items from Vendor-A, Vendor-B, Vendor-C
-createCADComponent('Base-Plate-01', new THREE.BoxGeometry(10, 0.5, 10), 0x7f8c8d, 'Vendor-A', [0, 0, 0]);
-createCADComponent('Bracket-Left-02', new THREE.BoxGeometry(1, 4, 1), 0x3498db, 'Vendor-B', [-3, 2, 0]);
-createCADComponent('Bracket-Right-03', new THREE.BoxGeometry(1, 4, 1), 0x3498db, 'Vendor-B', [3, 2, 0]);
-createCADComponent('Engine-Block-04', new THREE.CylinderGeometry(2, 2, 5, 32), 0x95a5a6, 'Vendor-A', [0, 2.5, 0]);
-createCADComponent('Valve-Cover-05', new THREE.SphereGeometry(1.5, 32, 16), 0xe67e22, 'Vendor-C', [0, 5.5, 0]);
-createCADComponent('Fastener-Pin-06', new THREE.CylinderGeometry(0.3, 0.3, 2, 16), 0xf1c40f, 'Vendor-B', [0, 2.5, 3]);
-
-// ==========================================
-// 3. EXPOSED MCP TOOL IMPLEMENTATION
-// ==========================================
+// Sample Public 3D Engine Model from Khronos Group repository
+const MODEL_URL = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/Buggy/glTF-Binary/Buggy.glb';
 
 /**
- * MCP Tool Handler: highlight_components
- *
- * @param {Object} args
- * @param {Object} args.filterCriteria - e.g. { supplier: "Vendor-B" }
- * @param {string} args.colorHex - Hex color string to highlight (e.g. "#FF0000")
- * @param {boolean} args.isolateMode - If true, hides all components that don't match criteria
+ * Adjusts camera position and controls target to fit the entire model in the viewport.
+ * @param {THREE.Object3D} object - The loaded CAD model root object
+ * @param {THREE.Camera} camera - Perspective camera
+ * @param {OrbitControls} controls - OrbitControls instance
+ * @param {number} offsetRatio - Multiplier to leave margin around the model (default 1.25)
  */
-window.mcp_highlight_components = function(args) {
-  logToConsole('Executing MCP Tool: highlight_components...');
-  logToConsole(`Payload: ${JSON.stringify(args)}`);
+function fitModelToView(object, camera, controls, offsetRatio = 1.25) {
+    // 1. Compute bounding box of the entire loaded object
+    const boundingBox = new THREE.Box3().setFromObject(object);
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
 
-  let matchedCount = 0;
+    boundingBox.getCenter(center);
+    boundingBox.getSize(size);
 
-  partsRegistry.forEach(mesh => {
-    const matchesSupplier = args.filterCriteria?.supplier &&
-                            mesh.userData.supplier === args.filterCriteria.supplier;
+    // 2. Center the object's origin
+    object.position.sub(center);
 
-    if (matchesSupplier) {
-      // Highlight match in requested red color
-      mesh.material.color.set(args.colorHex);
-      mesh.visible = true;
-      matchedCount++;
-    } else {
-      // Handle isolation mode (hide unmatched parts)
-      if (args.isolateMode) {
-        mesh.visible = false;
-      }
-    }
-  });
+    // 3. Get maximum dimension (width, height, or depth)
+    const maxDim = Math.max(size.x, size.y, size.z);
 
-  const responseMessage = `Successfully highlighted ${matchedCount} part(s) matching criteria. Isolate Mode: ${args.isolateMode}`;
-  logToConsole(`[MCP Response]: ${responseMessage}`);
+    if (maxDim === 0) return; // Prevent division by zero if empty
 
-  return {
-    status: 'success',
-    matchedPartsCount: matchedCount,
-    message: responseMessage
-  };
-};
+    // 4. Calculate required distance based on camera Field of View (FOV)
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraDistance = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * offsetRatio;
 
-// Helper: Reset scene to initial state
-function resetScene() {
-  partsRegistry.forEach(mesh => {
-    mesh.material.color.set(mesh.userData.originalColor);
-    mesh.visible = true;
-  });
-  logToConsole('Scene reset to default state.');
+    // 5. Reposition camera diagonally (Isometric view relative to size)
+    const cameraDirection = new THREE.Vector3(1, 0.8, 1).normalize();
+    camera.position.copy(cameraDirection.multiplyScalar(cameraDistance));
+
+    // 6. Set camera clipping planes dynamically to prevent near/far clipping artifacts
+    camera.near = cameraDistance / 100;
+    camera.far = cameraDistance * 100;
+    camera.updateProjectionMatrix();
+
+    // 7. Point OrbitControls target at origin center
+    controls.target.set(0, 0, 0);
+    controls.update();
+
+    logToConsole(`Fitted model to view. Bounding Size: ${maxDim.toFixed(2)} units`);
 }
 
-// Trigger helper simulating an incoming JSON payload from WebSocket / MCP Server
-function triggerMcpToolCall() {
-  const mockPayload = {
-    filterCriteria: { supplier: 'Vendor-B' },
-    colorHex: '#FF0000',
-    isolateMode: true
-  };
+// Granular Keyword-to-Vendor Mapping
+const vendorMap = {
+    'Vendor-A': ['tyre', 'tire', 'wheel', 'rim', 'rubber'],
+    'Vendor-B': ['chassis', 'frame', 'body', 'axle', 'suspension'],
+    'Vendor-C': ['engine', 'cylinder', 'valve', 'cover', 'piston', 'screw', 'bolt']
+};
 
-  // Call the tool as the MCP Server SDK would
-  window.mcp_highlight_components(mockPayload);
+/**
+ * Assigns supplier based on part name matching keywords
+ */
+function assignSupplier(partName) {
+    if (!partName) return 'Vendor-A';
+
+    const lowerName = partName.toLowerCase();
+
+    for (const [vendor, keywords] of Object.entries(vendorMap)) {
+        if (keywords.some(keyword => lowerName.includes(keyword))) {
+            return vendor;
+        }
+    }
+
+    // Fallback if no keyword matches
+    return 'Vendor-A';
+}
+
+loader.load(
+    MODEL_URL,
+    (gltf) => {
+        const model = gltf.scene;
+        scene.add(model);
+
+        model.traverse((child) => {
+            if (child.isMesh) {
+                // Get part name (or fallback to parent group name)
+                const partName = child.name || child.parent ?.name || `Part_${child.id}`;
+
+                // Determine Vendor dynamically
+                const supplier = assignSupplier(partName);
+
+                // Clone material for independent highlighting
+                child.material = Array.isArray(child.material) ?
+                    child.material.map(m => m.clone()) :
+                    child.material.clone();
+
+                child.userData = {
+                    partId: partName,
+                    supplier: supplier, // E.g., 'Vendor-A' for tyres, 'Vendor-B' for chassis
+                    originalColor: (Array.isArray(child.material) ? child.material[0] : child.material).color.getHex(),
+                    initialPosition: child.position.clone()
+                };
+
+                partsRegistry.push(child);
+            }
+        });
+
+        fitModelToView(model, camera, controls, 1.3);
+        logToConsole(`Loaded assembly: ${partsRegistry.length} parts registered.`);
+    },
+    (xhr) => {
+        const percent = Math.round((xhr.loaded / (xhr.total || 1)) * 100);
+        logToConsole(`Loading CAD Model... ${percent}%`);
+    },
+    (err) => logToConsole(`Error loading model: ${err.message}`)
+);
+
+// ==========================================
+// 3. MCP TOOL IMPLEMENTATIONS
+// ==========================================
+
+window.mcp_highlight_components = function (args) {
+    const targetSupplier = args.filterCriteria?.supplier?.toLowerCase();
+    const hexColor = parseInt(args.colorHex.replace('#', '0x'), 16);
+    let matchedCount = 0;
+
+    partsRegistry.forEach(mesh => {
+        const meshSupplier = mesh.userData.supplier?.toLowerCase();
+        const isMatch = targetSupplier && meshSupplier === targetSupplier;
+
+        if (isMatch) {
+            matchedCount++;
+            mesh.visible = true;
+
+            // Handle both single and multi-material meshes
+            if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(m => m.color.setHex(hexColor));
+            } else {
+                mesh.material.color.setHex(hexColor);
+            }
+        } else {
+            if (args.isolateMode) {
+                mesh.visible = false;
+            } else {
+                // Reset non-matching parts back to original color if isolateMode is false
+                if (Array.isArray(mesh.material)) {
+                    mesh.material.forEach(m => m.color.setHex(mesh.userData.originalColor));
+                } else {
+                    mesh.material.color.setHex(mesh.userData.originalColor);
+                }
+            }
+        }
+    });
+
+    logToConsole(`Highlighted ${matchedCount} part(s) matching '${args.filterCriteria?.supplier}'.`);
+};
+
+window.mcp_set_camera_view = function (args) {
+    // Calculate current scene bounds
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z) || 10;
+
+    const fov = camera.fov * (Math.PI / 180);
+    const distance = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 1.3;
+
+    controls.target.set(0, 0, 0);
+
+    switch (args.preset) {
+        case 'Top':
+            camera.position.set(0, distance, 0.001);
+            break;
+        case 'Front':
+            camera.position.set(0, 0, distance);
+            break;
+        case 'Right':
+            camera.position.set(distance, 0, 0);
+            break;
+        case 'Isometric':
+        default:
+            camera.position.set(distance * 0.7, distance * 0.6, distance * 0.7);
+            break;
+    }
+
+    controls.update();
+    logToConsole(`Camera view set to ${args.preset}`);
+};
+
+window.mcp_generate_exploded_view = function (args) {
+    const factor = args.explosionFactor || 0;
+    partsRegistry.forEach(mesh => {
+        const initial = mesh.userData.initialPosition;
+        const direction = initial.clone().normalize();
+        if (direction.length() === 0) direction.set(0, 1, 0);
+
+        mesh.position.copy(initial).addScaledVector(direction, factor * 2);
+    });
+    logToConsole(`Exploded view factor set to: ${factor}`);
+};
+
+window.mcp_create_cross_section = function (args) {
+    const enabled = args.enabled ?? true;
+    const offset = args.offsetDistance ?? 0;
+
+    if (!enabled) {
+        partsRegistry.forEach(mesh => mesh.material.clippingPlanes = []);
+        logToConsole('Cross section disabled.');
+        return;
+    }
+
+    switch (args.plane) {
+        case 'XY':
+            clipPlane.normal.set(0, 0, -1);
+            break;
+        case 'YZ':
+            clipPlane.normal.set(-1, 0, 0);
+            break;
+        case 'ZX':
+        default:
+            clipPlane.normal.set(0, -1, 0);
+            break;
+    }
+
+    clipPlane.constant = offset + 1.0;
+    partsRegistry.forEach(mesh => mesh.material.clippingPlanes = [clipPlane]);
+    logToConsole(`Cross section active on ${args.plane} plane at offset ${offset}`);
+};
+
+function resetScene() {
+    partsRegistry.forEach(mesh => {
+        mesh.material.color.setHex(mesh.userData.originalColor);
+        mesh.position.copy(mesh.userData.initialPosition);
+        mesh.material.clippingPlanes = [];
+        mesh.visible = true;
+    });
+    window.mcp_set_camera_view({
+        preset: 'Isometric'
+    });
+    logToConsole('Scene reset to default.');
 }
 
 function logToConsole(text) {
-  const logEl = document.getElementById('log-output');
-  logEl.innerHTML += `<div>> ${text}</div>`;
-  logEl.scrollTop = logEl.scrollHeight;
+    const logEl = document.getElementById('log-output');
+    logEl.innerHTML += `<div>> ${text}</div>`;
+    logEl.scrollTop = logEl.scrollHeight;
 }
 
 // ==========================================
-// 4. ANIMATION & RESIZE LOOPS
+// 4. WEBSOCKET BRIDGE
 // ==========================================
+function connectWebSocket() {
+    const socket = new WebSocket('ws://localhost:8080');
+
+    socket.onopen = () => {
+        logToConsole('Connected to MCP Server on ws://localhost:8080');
+    };
+
+    socket.onmessage = (event) => {
+        try {
+            const {
+                action,
+                payload
+            } = JSON.parse(event.data);
+            if (action === 'highlight_components') window.mcp_highlight_components(payload);
+            if (action === 'set_camera_view') window.mcp_set_camera_view(payload);
+            if (action === 'generate_exploded_view') window.mcp_generate_exploded_view(payload);
+            if (action === 'create_cross_section') window.mcp_create_cross_section(payload);
+        } catch (err) {
+            console.error('Action error', err);
+        }
+    };
+
+    socket.onclose = () => setTimeout(connectWebSocket, 3000);
+}
+
+connectWebSocket();
+
 function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
 }
 animate();
 
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-// Ensure this script tag exists in your index.html
-const WS_PORT = 8080;
-let socket;
-
-function connectWebSocket() {
-  socket = new WebSocket(`ws://localhost:${WS_PORT}`);
-
-  socket.onopen = () => {
-    logToConsole(`Connected to MCP Server WebSocket Bridge on port ${WS_PORT}`);
-  };
-
-  socket.onmessage = (event) => {
-    try {
-      const message = JSON.parse(event.data);
-      if (message.action === 'highlight_components') {
-        window.mcp_highlight_components(message.payload);
-      }
-    } catch (err) {
-      console.error("Failed to execute MCP command", err);
-    }
-  };
-
-  socket.onerror = (err) => {
-    console.error("WebSocket Error:", err);
-  };
-
-  socket.onclose = () => {
-    logToConsole("WebSocket closed. Retrying connection in 3s...");
-    setTimeout(connectWebSocket, 3000);
-  };
-}
-
-// Start connection loop
-connectWebSocket();

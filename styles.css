@@ -33,13 +33,12 @@ h2 {
   background: #007acc;
   color: white;
   border: none;
-  padding: 10px 14px;
-  margin-top: 10px;
+  padding: 8px 12px;
+  margin-top: 6px;
   border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
   width: 100%;
-  transition: background 0.2s;
 }
 
 .btn:hover {
@@ -48,7 +47,6 @@ h2 {
 
 .btn-reset {
   background: #555;
-  margin-top: 5px;
 }
 
 .btn-reset:hover {
@@ -63,7 +61,7 @@ h2 {
   border-radius: 4px;
   font-family: monospace;
   font-size: 0.8rem;
-  max-height: 120px;
+  max-height: 140px;
   overflow-y: auto;
   color: #00ff66;
 }
