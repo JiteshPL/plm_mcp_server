@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Three.js MCP Tool POC - CAD Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #1a1a1a;
+      color: #ffffff;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(30, 30, 30, 0.85);
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      max-width: 380px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    h2 { margin-top: 0; font-size: 1.1rem; color: #61dafb; }
+    .btn {
+      background: #007acc;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      margin-top: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+    }
+    .btn:hover { background: #005999; }
+    .btn-reset { background: #555; }
+    .btn-reset:hover { background: #333; }
+    #log-output {
+      margin-top: 15px;
+      background: #111;
+      border: 1px solid #333;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      max-height: 140px;
+      overflow-y: auto;
+      color: #00ff66;
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div id="ui-overlay">
+    <h2>PLM Viewer - MCP CAD Control</h2>
+    <p style="font-size: 0.8rem; color: #ccc;">Interactive WebGL session connected to MCP Server on ws://localhost:8080</p>
+
+    <button class="btn btn-reset" onclick="resetScene()">Reset View & Scene</button>
+    <div id="log-output">Connecting to MCP Server...</div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. THREE.JS SCENE SETUP
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1e1e1e);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(15, 12, 20);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.localClippingEnabled = true; // Enable cross-section clipping planes
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(20, 40, 20);
+    scene.add(dirLight);
+
+    const gridHelper = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+    scene.add(gridHelper);
+
+    // Dynamic Cross-Section Plane
+    const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 10);
+
+    // ==========================================
+    // 2. MOCK CAD ASSEMBLY CREATION
+    // ==========================================
+    const partsRegistry = [];
+
+    function createCADComponent(id, geometry, color, supplier, position) {
+      const material = new THREE.MeshStandardMaterial({
+        color: color,
+        roughness: 0.4,
+        metalness: 0.6,
+        side: THREE.DoubleSide,
+        clippingPlanes: [] // Clipped dynamically
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...position);
+      mesh.name = id;
+
+      mesh.userData = {
+        partId: id,
+        supplier: supplier,
+        originalColor: color,
+        initialPosition: new THREE.Vector3(...position)
+      };
+
+      scene.add(mesh);
+      partsRegistry.push(mesh);
+    }
+
+    createCADComponent('Base-Plate-01', new THREE.BoxGeometry(10, 0.5, 10), 0x7f8c8d, 'Vendor-A', [0, 0, 0]);
+    createCADComponent('Bracket-Left-02', new THREE.BoxGeometry(1, 4, 1), 0x3498db, 'Vendor-B', [-3, 2, 0]);
+    createCADComponent('Bracket-Right-03', new THREE.BoxGeometry(1, 4, 1), 0x3498db, 'Vendor-B', [3, 2, 0]);
+    createCADComponent('Engine-Block-04', new THREE.CylinderGeometry(2, 2, 5, 32), 0x95a5a6, 'Vendor-A', [0, 2.5, 0]);
+    createCADComponent('Valve-Cover-05', new THREE.SphereGeometry(1.5, 32, 16), 0xe67e22, 'Vendor-C', [0, 5.5, 0]);
+    createCADComponent('Fastener-Pin-06', new THREE.CylinderGeometry(0.3, 0.3, 2, 16), 0xf1c40f, 'Vendor-B', [0, 2.5, 3]);
+
+    // ==========================================
+    // 3. TOOL IMPLEMENTATIONS
+    // ==========================================
+
+    // Tool 1: highlight_components
+    window.mcp_highlight_components = function(args) {
+      partsRegistry.forEach(mesh => {
+        const matches = args.filterCriteria?.supplier && mesh.userData.supplier === args.filterCriteria.supplier;
+        if (matches) {
+          mesh.material.color.set(args.colorHex);
+          mesh.visible = true;
+        } else if (args.isolateMode) {
+          mesh.visible = false;
+        }
+      });
+      logToConsole(`Executed highlight_components for supplier: ${args.filterCriteria?.supplier}`);
+    };
+
+    // Tool 2: set_camera_view
+    window.mcp_set_camera_view = function(args) {
+      const distance = 25;
+      controls.target.set(0, 2, 0);
+
+      switch(args.preset) {
+        case 'Top':
+          camera.position.set(0, distance, 0.1);
+          break;
+        case 'Front':
+          camera.position.set(0, 2, distance);
+          break;
+        case 'Right':
+          camera.position.set(distance, 2, 0);
+          break;
+        case 'Isometric':
+        default:
+          camera.position.set(15, 12, 20);
+          break;
+      }
+      controls.update();
+      logToConsole(`Camera view set to ${args.preset}`);
+    };
+
+    // Tool 3: generate_exploded_view
+    window.mcp_generate_exploded_view = function(args) {
+      const factor = args.explosionFactor || 0;
+      partsRegistry.forEach(mesh => {
+        const initial = mesh.userData.initialPosition;
+        // Explode vectors outward from center (0,2,0)
+        const direction = new THREE.Vector3().subVectors(initial, new THREE.Vector3(0, 2, 0)).normalize();
+        if (direction.length() === 0) direction.set(0, 1, 0); // fallback for centered items
+
+        mesh.position.copy(initial).addScaledVector(direction, factor * 3);
+      });
+      logToConsole(`Exploded view set factor: ${factor}`);
+    };
+
+    // Tool 4: create_cross_section
+    window.mcp_create_cross_section = function(args) {
+      const enabled = args.enabled ?? true;
+      const offset = args.offsetDistance ?? 0;
+
+      if (!enabled) {
+        partsRegistry.forEach(mesh => mesh.material.clippingPlanes = []);
+        logToConsole("Cross-section section disabled.");
+        return;
+      }
+
+      switch(args.plane) {
+        case 'XY': clipPlane.normal.set(0, 0, -1); break;
+        case 'YZ': clipPlane.normal.set(-1, 0, 0); break;
+        case 'ZX':
+        default:   clipPlane.normal.set(0, -1, 0); break;
+      }
+
+      clipPlane.constant = offset + 2.5; // Offset relative to center height
+      partsRegistry.forEach(mesh => mesh.material.clippingPlanes = [clipPlane]);
+      logToConsole(`Cross section active on ${args.plane} plane at offset ${offset}`);
+    };
+
+    // Reset Scene Utility
+    function resetScene() {
+      partsRegistry.forEach(mesh => {
+        mesh.material.color.set(mesh.userData.originalColor);
+        mesh.position.copy(mesh.userData.initialPosition);
+        mesh.material.clippingPlanes = [];
+        mesh.visible = true;
+      });
+      window.mcp_set_camera_view({ preset: 'Isometric' });
+      logToConsole('Scene reset to default.');
+    }
+
+    function logToConsole(text) {
+      const logEl = document.getElementById('log-output');
+      logEl.innerHTML += `<div>> ${text}</div>`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // ==========================================
+    // 4. WEBSOCKET CONNECTION BRIDGE
+    // ==========================================
+    function connectWebSocket() {
+      const socket = new WebSocket(`ws://localhost:8080`);
+
+      socket.onopen = () => {
+        logToConsole(`Connected to MCP Server on ws://localhost:8080`);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          const { action, payload } = message;
+
+          if (action === 'highlight_components') window.mcp_highlight_components(payload);
+          if (action === 'set_camera_view') window.mcp_set_camera_view(payload);
+          if (action === 'generate_exploded_view') window.mcp_generate_exploded_view(payload);
+          if (action === 'create_cross_section') window.mcp_create_cross_section(payload);
+
+        } catch (err) {
+          console.error("Failed to execute action", err);
+        }
+      };
+
+      socket.onclose = () => {
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    connectWebSocket();
+
+    // Render loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
