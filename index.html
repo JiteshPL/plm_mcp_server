@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Three.js Realistic CAD Viewer - MCP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D PLM Viewer - AI Copilot Dashboard</title>
   <link rel="stylesheet" href="styles.css">
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -10,16 +11,47 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
-  <div id="canvas-container"></div>
+  <div class="app-container">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="status-indicator"></div>
+          <h2>PLM AI Copilot</h2>
+        </div>
+        <span class="subtitle">Natural Language & One-Click Control</span>
+      </div>
 
-  <div id="ui-overlay">
-    <h2>Realistic CAD Viewer - MCP Control</h2>
-    <p style="font-size: 0.8rem; color: #ccc;">Connected on ws://localhost:8080</p>
+      <div class="preset-section">
+        <span class="section-title">QUICK OPTIONS</span>
+        <div class="options-grid">
+          <button class="chip-btn" onclick="sendQuickAction('Explode assembly by 1.2')">💥 Explode View</button>
+          <button class="chip-btn" onclick="sendQuickAction('Highlight Vendor-A components in blue')">🔵 Vendor-A (Body)</button>
+          <button class="chip-btn" onclick="sendQuickAction('Highlight Vendor-B components in red')">🔴 Vendor-B (Tyres)</button>
+          <button class="chip-btn" onclick="sendQuickAction('Set view to Top')">📐 Top View</button>
+          <button class="chip-btn" onclick="sendQuickAction('Set view to Isometric')">🎲 Isometric View</button>
+          <button class="chip-btn" onclick="sendQuickAction('Create ZX cross section')">✂️ Cross Section</button>
+          <button class="chip-btn btn-reset-chip" onclick="triggerReset()">🔄 Reset All</button>
+        </div>
+      </div>
 
-    <button class="btn btn-reset" onclick="resetScene()">Reset View & Scene</button>
-    <div id="log-output">Loading Realistic Model...</div>
+      <div id="chat-messages">
+        <div class="message assistant">
+          Hello! I am your 3D PLM Copilot. Type a command or click any quick option above to interact with the model.
+        </div>
+      </div>
+
+      <div class="chat-input-container">
+        <input type="text" id="user-input" placeholder="Ask PLM Copilot..." onkeydown="if(event.key==='Enter') sendMessage()" />
+        <button id="send-btn" onclick="sendMessage()">Send</button>
+      </div>
+    </aside>
+
+    <main id="canvas-container">
+      <div id="log-output">Loading CAD Model...</div>
+    </main>
   </div>
 
   <script src="app.js"></script>
+  <script src="chat-ui.js"></script>
 </body>
 </html>
