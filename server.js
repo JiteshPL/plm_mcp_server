@@ -82,11 +82,12 @@ const TOOL_DEFINITIONS = [
 // Fallback Keyword Matcher (Works instantly without external API/LLM)
 function parseLocalIntent(text) {
   const lower = text.toLowerCase();
+  const actions = [];
   
   if (lower.includes("explode")) {
     const factorMatch = lower.match(/\b([0-2](\.\d+)?)\b/);
     const factor = factorMatch ? parseFloat(factorMatch[1]) : 1.2;
-    return [{ name: "generate_exploded_view", args: { explosionFactor: factor } }];
+    actions.push({ name: "generate_exploded_view", args: { explosionFactor: factor } });
   }
   
   if (lower.includes("isometric") || lower.includes("top") || lower.includes("front") || lower.includes("right")) {
@@ -94,7 +95,7 @@ function parseLocalIntent(text) {
     if (lower.includes("top")) preset = "Top";
     if (lower.includes("front")) preset = "Front";
     if (lower.includes("right")) preset = "Right";
-    return [{ name: "set_camera_view", args: { preset } }];
+    actions.push({ name: "set_camera_view", args: { preset } });
   }
 
   if (lower.includes("vendor") || lower.includes("highlight")) {
@@ -107,20 +108,27 @@ function parseLocalIntent(text) {
     if (lower.includes("red")) colorHex = "#ff0000";
     if (lower.includes("green")) colorHex = "#00ff00";
 
-    return [{ name: "highlight_components", args: { filterCriteria: { supplier }, colorHex, isolateMode: false } }];
+    actions.push({ name: "highlight_components", args: { filterCriteria: { supplier }, colorHex, isolateMode: false } });
   }
 
   if (lower.includes("cross section") || lower.includes("slice") || lower.includes("cut")) {
-    return [{ name: "create_cross_section", args: { plane: "ZX", offsetDistance: 0, enabled: true } }];
+    actions.push({ name: "create_cross_section", args: { plane: "ZX", offsetDistance: 0, enabled: true } });
   }
 
-  return null;
+  return actions.length > 0 ? actions : null;
 }
 
 // -------------------------------------------------------------
 // HTTP & WebSocket Server Setup
 // -------------------------------------------------------------
 let browserSocket = null;
+
+function sendActionsToBrowser(actions) {
+  // One frame makes a multi-tool command atomic at the protocol boundary. The
+  // client processes this array in order, so a later tool cannot replace a
+  // pending earlier WebSocket message.
+  browserSocket.send(JSON.stringify({ actions }));
+}
 
 const httpServer = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -196,10 +204,8 @@ const httpServer = http.createServer(async (req, res) => {
         // Broadcast to Browser over WebSocket
         if (executedTools.length > 0) {
           if (browserSocket && browserSocket.readyState === 1) {
-            for (const tool of executedTools) {
-              console.log(`[Server] Sending WebSocket action to Browser: ${tool.name}`, tool.args);
-              browserSocket.send(JSON.stringify({ action: tool.name, payload: tool.args }));
-            }
+            console.log(`[Server] Sending ${executedTools.length} WebSocket action(s) to Browser: ${executedTools.map(tool => tool.name).join(", ")}`);
+            sendActionsToBrowser(executedTools);
           } else {
             console.error("[Server Error] Cannot execute action: No active WebSocket browser connection!");
             reply += " (Warning: 3D Browser View is not connected over WebSocket)";
@@ -244,7 +250,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (!browserSocket || browserSocket.readyState !== 1) {
     return { isError: true, content: [{ type: "text", text: "Error: No active browser connection." }] };
   }
-  browserSocket.send(JSON.stringify({ action: name, payload: args }));
+  sendActionsToBrowser([{ name, args }]);
   return { content: [{ type: "text", text: `Executed ${name}` }] };
 });
 

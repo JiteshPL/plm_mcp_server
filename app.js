@@ -295,20 +295,46 @@ function connectWebSocket() {
 
     socket.onmessage = (event) => {
         try {
-            const {
-                action,
-                payload
-            } = JSON.parse(event.data);
-            if (action === 'highlight_components') window.mcp_highlight_components(payload);
-            if (action === 'set_camera_view') window.mcp_set_camera_view(payload);
-            if (action === 'generate_exploded_view') window.mcp_generate_exploded_view(payload);
-            if (action === 'create_cross_section') window.mcp_create_cross_section(payload);
+            const message = JSON.parse(event.data);
+            // New servers send an ordered batch. Keep accepting the old single
+            // action shape so a browser refresh is not required during rollout.
+            const actions = message.actions || [{ name: message.action, args: message.payload }];
+            executeActions(actions);
         } catch (err) {
             console.error('Action error', err);
         }
     };
 
     socket.onclose = () => setTimeout(connectWebSocket, 3000);
+}
+
+const actionHandlers = {
+    highlight_components: window.mcp_highlight_components,
+    set_camera_view: window.mcp_set_camera_view,
+    generate_exploded_view: window.mcp_generate_exploded_view,
+    create_cross_section: window.mcp_create_cross_section
+};
+
+let actionQueue = Promise.resolve();
+
+function executeActions(actions) {
+    actionQueue = actionQueue.then(() => {
+        for (const { name, args } of actions) {
+            const handler = actionHandlers[name];
+            if (!handler) {
+                console.warn(`Unknown MCP action: ${name}`);
+                continue;
+            }
+            // A malformed action should be reported without preventing the
+            // remaining actions in this LLM command from running.
+            try {
+                handler(args || {});
+            } catch (err) {
+                console.error(`Action error for ${name}`, err);
+            }
+        }
+    }).catch(err => console.error('Action error', err));
+    return actionQueue;
 }
 
 connectWebSocket();
@@ -324,4 +350,66 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+
+/**
+ * Renders a structured Action Card inside the chat container
+ * @param {string} actionType - E.g., "highlight_components" or "set_camera_view"
+ * @param {string} description - E.g., "Highlighted 87 parts matching Vendor-A"
+ * @param {Function} undoCallback - Function to revert the specific action
+ */
+function appendActionCard(actionType, description, undoCallback = null) {
+  const chatContainer = document.getElementById('chat-messages');
+  if (!chatContainer) return;
+
+  const card = document.createElement('div');
+  card.className = 'message assistant action-card';
+
+  card.innerHTML = `
+    <div class="action-info">
+      <span class="action-badge">✓ ${actionType.replace('_', ' ')}</span>
+      <span>${description}</span>
+    </div>
+    ${undoCallback ? '<button class="undo-btn">Undo</button>' : ''}
+  `;
+
+  if (undoCallback) {
+    const undoBtn = card.querySelector('.undo-btn');
+    undoBtn?.addEventListener('click', () => {
+      undoCallback();
+      card.style.opacity = '0.5';
+      undoBtn.disabled = true;
+      undoBtn.innerText = 'Reverted';
+    });
+  }
+
+  chatContainer.appendChild(card);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function runVendorHighlight(vendor, colorHex) {
+  window.mcp_highlight_components({
+    filterCriteria: { supplier: vendor },
+    colorHex,
+    isolateMode: true
+  });
+}
+
+document.getElementById('btnVendorA')?.addEventListener('click', () => {
+  runVendorHighlight('Vendor-A', '#0000ff');
+  appendActionCard(
+    'highlight_components',
+    'Highlighted Vendor-A parts in blue',
+    () => resetScene()
+  );
+});
+
+document.getElementById('btnVendorB')?.addEventListener('click', () => {
+  runVendorHighlight('Vendor-B', '#ff0000');
+  appendActionCard(
+    'highlight_components',
+    'Highlighted Vendor-B parts in red',
+    () => resetScene()
+  );
 });
