@@ -5,17 +5,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { WebSocketServer } from "ws";
 import OpenAI from "openai";
+import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 
 const PORT = 8080;
 
-// BEFORE:
-// const openai = new OpenAI({
-//   baseURL: "http://localhost:11434/v1",
-//   apiKey: "ollama"
-// });
-// const MODEL_NAME = "qwen2.5:3b";
-
-// AFTER:
 const openai = new OpenAI({
   baseURL: "https://router.huggingface.co/v1",
   apiKey: process.env.HUGGINGFACEHUB_API_TOKEN || process.env.HUGGINGFACE_API_KEY
@@ -26,6 +19,11 @@ const TEMPERATURE = parseFloat(process.env.HUGGINGFACE_TEMPERATURE || "0.2");
 const MAX_NEW_TOKENS = parseInt(process.env.HUGGINGFACE_MAX_NEW_TOKENS || "512", 10);
 
 const TOOL_DEFINITIONS = [
+  {
+    name: "reset_scene",
+    description: "Restores the 3D scene to its initial camera view, component positions, colors, visibility, and clipping state.",
+    inputSchema: { type: "object", properties: {} }
+  },
   {
     name: "highlight_components",
     description: "Highlights target CAD components by filter criteria (e.g., supplier/vendor) in color and optionally isolates them.",
@@ -142,9 +140,17 @@ function getClarification(text) {
   return null;
 }
 
+function isResetRequest(text) {
+  const lower = text.toLowerCase();
+  return /\breset\b/.test(lower)
+    || /\b(default|initial)\s+(view|scene)\b/.test(lower)
+    || /\b(return|restore)\b.*\b(default|initial)\b/.test(lower);
+}
+
 // Fallback Keyword Matcher (Works instantly without external API/LLM)
 function parseLocalIntent(text) {
   const lower = text.toLowerCase();
+  if (isResetRequest(text)) return [{ name: "reset_scene", args: {} }];
   const actions = [];
   
   if (lower.includes("explode")) {
@@ -199,6 +205,109 @@ function sendActionsToBrowser(actions) {
   browserSocket.send(JSON.stringify({ actions }));
 }
 
+// LangGraph state and nodes for one chat command. The graph keeps command
+// selection explicit and makes it straightforward to add approvals or retries.
+const CommandState = Annotation.Root({
+  message: Annotation,
+  history: Annotation({ default: () => [] }),
+  clarification: Annotation({ default: () => null }),
+  executedTools: Annotation({ default: () => [] }),
+  reply: Annotation({ default: () => "" }),
+  llmFailed: Annotation({ default: () => false })
+});
+
+function clarifyCommand(state) {
+  return { clarification: getClarification(state.message) };
+}
+
+function detectReset(state) {
+  return isResetRequest(state.message)
+    ? { executedTools: [{ name: "reset_scene", args: {} }], reply: "Scene and camera reset to the initial view." }
+    : {};
+}
+
+function routeAfterReset(state) {
+  return Array.isArray(state.executedTools) && state.executedTools.length > 0
+    ? "dispatch"
+    : "clarify";
+}
+
+function routeAfterClarification(state) {
+  return state.clarification ? END : "plan_llm";
+}
+
+async function planWithLlm(state) {
+  try {
+    const tools = TOOL_DEFINITIONS.map(tool => ({
+      type: "function",
+      function: { name: tool.name, description: tool.description, parameters: tool.inputSchema }
+    }));
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [
+        { role: "system", content: "You are an AI CAD assistant. Use tool calls to control the 3D canvas. Never guess a highlight color, camera preset, section offset, or explosion factor: ask the user to choose when any is missing." },
+        ...state.history,
+        { role: "user", content: state.message }
+      ],
+      tools,
+      tool_choice: "auto",
+      temperature: TEMPERATURE,
+      max_tokens: MAX_NEW_TOKENS
+    });
+    const responseMessage = response.choices[0].message;
+    const executedTools = (responseMessage.tool_calls || []).map(toolCall => ({
+      name: toolCall.function.name,
+      args: typeof toolCall.function.arguments === "string"
+        ? JSON.parse(toolCall.function.arguments)
+        : toolCall.function.arguments
+    }));
+    return {
+      executedTools,
+      reply: responseMessage.content || (executedTools.length > 0 ? `Executed action: ${executedTools.map(tool => tool.name).join(", ")}` : "Command received, but no matching 3D action found."),
+      llmFailed: false
+    };
+  } catch (error) {
+    console.warn("[LangGraph: plan_llm] LLM planning failed; routing to fallback.", error.message);
+    return { llmFailed: true };
+  }
+}
+
+function routeAfterPlanning(state) {
+  return state.llmFailed ? "fallback" : "dispatch";
+}
+
+function fallbackPlan(state) {
+  const executedTools = parseLocalIntent(state.message);
+  return executedTools
+    ? { executedTools, reply: `Executed action: ${executedTools.map(action => action.name).join(", ")}` }
+    : { executedTools: [], reply: "Command received, but no matching 3D action found." };
+}
+
+function dispatchActions(state) {
+  if (state.executedTools.length === 0) return {};
+  if (!browserSocket || browserSocket.readyState !== 1) {
+    console.error("[Server Error] Cannot execute action: No active WebSocket browser connection!");
+    return { reply: `${state.reply} (Warning: 3D Browser View is not connected over WebSocket)` };
+  }
+  console.log(`[LangGraph: dispatch] Sending ${state.executedTools.length} action(s): ${state.executedTools.map(tool => tool.name).join(", ")}`);
+  sendActionsToBrowser(state.executedTools);
+  return {};
+}
+
+const commandGraph = new StateGraph(CommandState)
+  .addNode("detect_reset", detectReset)
+  .addNode("clarify", clarifyCommand)
+  .addNode("plan_llm", planWithLlm)
+  .addNode("fallback", fallbackPlan)
+  .addNode("dispatch", dispatchActions)
+  .addEdge(START, "detect_reset")
+  .addConditionalEdges("detect_reset", routeAfterReset, ["dispatch", "clarify"])
+  .addConditionalEdges("clarify", routeAfterClarification, ["plan_llm", END])
+  .addConditionalEdges("plan_llm", routeAfterPlanning, ["fallback", "dispatch"])
+  .addEdge("fallback", "dispatch")
+  .addEdge("dispatch", END)
+  .compile();
+
 const httpServer = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -218,78 +327,14 @@ const httpServer = http.createServer(async (req, res) => {
         const { message, history = [] } = JSON.parse(body);
         console.log(`[Server] Received user prompt: "${message}"`);
 
-        let executedTools = [];
-        let reply = "";
-        const clarification = getClarification(message);
-
-        if (clarification) {
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ...clarification, executedTools }));
-          return;
-        }
-
-        try {
-          const tools = TOOL_DEFINITIONS.map(tool => ({
-            type: "function",
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.inputSchema
-            }
-          }));
-
-          const response = await openai.chat.completions.create({
-            model: MODEL_NAME,
-            messages: [
-              { role: "system", content: "You are an AI CAD assistant. Use tool calls to control the 3D canvas. Never guess a highlight color, camera preset, section offset, or explosion factor: ask the user to choose when any is missing." },
-              ...history,
-              { role: "user", content: message }
-            ],
-            tools: tools,
-            tool_choice: "auto",
-            temperature: TEMPERATURE,
-            max_tokens: MAX_NEW_TOKENS
-          });
-
-          const responseMessage = response.choices[0].message;
-
-          if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-            for (const toolCall of responseMessage.tool_calls) {
-              const actionName = toolCall.function.name;
-              const args = typeof toolCall.function.arguments === "string"
-                ? JSON.parse(toolCall.function.arguments)
-                : toolCall.function.arguments;
-
-              executedTools.push({ name: actionName, args });
-            }
-            reply = responseMessage.content || `Executed action: ${executedTools.map(t => t.name).join(", ")}`;
-          } else {
-            reply = responseMessage.content;
-          }
-        } catch (llmErr) {
-          // LLM fallback parser
-          const fallbackActions = parseLocalIntent(message);
-          if (fallbackActions) {
-            executedTools = fallbackActions;
-            reply = `Executed action: ${fallbackActions.map(a => a.name).join(", ")}`;
-          } else {
-            reply = "Command received, but no matching 3D action found.";
-          }
-        }
-
-        // Broadcast to Browser over WebSocket
-        if (executedTools.length > 0) {
-          if (browserSocket && browserSocket.readyState === 1) {
-            console.log(`[Server] Sending ${executedTools.length} WebSocket action(s) to Browser: ${executedTools.map(tool => tool.name).join(", ")}`);
-            sendActionsToBrowser(executedTools);
-          } else {
-            console.error("[Server Error] Cannot execute action: No active WebSocket browser connection!");
-            reply += " (Warning: 3D Browser View is not connected over WebSocket)";
-          }
-        }
+        const result = await commandGraph.invoke({ message, history });
 
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ reply, executedTools }));
+        if (result.clarification) {
+          res.end(JSON.stringify({ ...result.clarification, executedTools: [] }));
+        } else {
+          res.end(JSON.stringify({ reply: result.reply, executedTools: result.executedTools }));
+        }
 
       } catch (err) {
         console.error("API Error:", err);

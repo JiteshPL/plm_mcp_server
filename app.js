@@ -289,6 +289,10 @@ function resetScene() {
     logToConsole('Scene reset to default.');
 }
 
+window.mcp_reset_scene = function () {
+    resetScene();
+};
+
 function logToConsole(text) {
     const logEl = document.getElementById('log-output');
     logEl.innerHTML += `<div>> ${text}</div>`;
@@ -321,6 +325,7 @@ function connectWebSocket() {
 }
 
 const actionHandlers = {
+    reset_scene: window.mcp_reset_scene,
     highlight_components: window.mcp_highlight_components,
     set_camera_view: window.mcp_set_camera_view,
     generate_exploded_view: window.mcp_generate_exploded_view,

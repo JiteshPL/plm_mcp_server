@@ -63,7 +63,16 @@ function appendChoiceButtons(messageEl, choices) {
     button.className = 'choice-btn';
     button.type = 'button';
     button.innerText = label;
-    button.addEventListener('click', () => sendQuickAction(message));
+    button.addEventListener('click', () => {
+      // Lock the entire choice group after one selection so the same
+      // clarification cannot trigger multiple commands.
+      choicesEl.querySelectorAll('.choice-btn').forEach(choice => {
+        choice.disabled = true;
+        choice.classList.add('choice-btn-disabled');
+      });
+      button.classList.add('choice-btn-selected');
+      sendQuickAction(message);
+    });
     choicesEl.appendChild(button);
   });
 
