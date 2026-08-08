@@ -12,6 +12,10 @@ const State = Annotation.Root({
 export function createCommandGraph(openai) {
   const detectReset = state => isResetRequest(state.message) ? { executedTools: [{ name: "reset_scene", args: {} }], reply: "Scene and camera reset to the initial view." } : {};
   const clarify = state => ({ clarification: getClarification(state.message) });
+  const planExplicitActions = state => {
+    const executedTools = parseLocalIntent(state.message);
+    return executedTools ? { executedTools, reply: `Executed action: ${executedTools.map(tool => tool.name).join(", ")}` } : {};
+  };
   const planLlm = async state => {
     try {
       const tools = TOOL_DEFINITIONS.map(tool => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } }));
@@ -33,10 +37,11 @@ export function createCommandGraph(openai) {
     return {};
   };
   return new StateGraph(State)
-    .addNode("detect_reset", detectReset).addNode("clarify", clarify).addNode("plan_llm", planLlm).addNode("fallback", fallback).addNode("dispatch", dispatch)
+    .addNode("detect_reset", detectReset).addNode("clarify", clarify).addNode("plan_explicit", planExplicitActions).addNode("plan_llm", planLlm).addNode("fallback", fallback).addNode("dispatch", dispatch)
     .addEdge(START, "detect_reset")
     .addConditionalEdges("detect_reset", state => Array.isArray(state.executedTools) && state.executedTools.length ? "dispatch" : "clarify", ["dispatch", "clarify"])
-    .addConditionalEdges("clarify", state => state.clarification ? END : "plan_llm", ["plan_llm", END])
+    .addConditionalEdges("clarify", state => state.clarification ? END : "plan_explicit", ["plan_explicit", END])
+    .addConditionalEdges("plan_explicit", state => Array.isArray(state.executedTools) && state.executedTools.length ? "dispatch" : "plan_llm", ["dispatch", "plan_llm"])
     .addConditionalEdges("plan_llm", state => state.llmFailed ? "fallback" : "dispatch", ["fallback", "dispatch"])
     .addEdge("fallback", "dispatch").addEdge("dispatch", END).compile();
 }

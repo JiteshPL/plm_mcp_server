@@ -144,6 +144,7 @@ loader.load(
         });
 
         fitModelToView(model, camera, controls, 1.3);
+        configureExplosionData(model);
         logToConsole(`Loaded assembly: ${partsRegistry.length} parts registered.`);
     },
     (xhr) => {
@@ -152,6 +153,25 @@ loader.load(
     },
     (err) => logToConsole(`Error loading model: ${err.message}`)
 );
+
+function configureExplosionData(model) {
+    scene.updateMatrixWorld(true);
+    const assemblyCenter = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+
+    partsRegistry.forEach((mesh, index) => {
+        const partCenter = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+        const direction = partCenter.sub(assemblyCenter);
+
+        // Nested GLTF meshes can share one local origin; give each of those a
+        // stable direction so the assembly still visibly separates.
+        if (direction.lengthSq() < 0.000001) {
+            direction.set((index % 3) - 1, (Math.floor(index / 3) % 3) - 1, (Math.floor(index / 9) % 3) - 1);
+        }
+
+        mesh.userData.initialWorldPosition = mesh.getWorldPosition(new THREE.Vector3());
+        mesh.userData.explosionDirection = direction.normalize();
+    });
+}
 
 // ==========================================
 // 3. MCP TOOL IMPLEMENTATIONS
@@ -237,13 +257,14 @@ window.mcp_set_camera_view = function (args) {
 };
 
 window.mcp_generate_exploded_view = function (args) {
-    const factor = args.c || 0;
+    const factor = Number(args.explosionFactor) || 0;
     partsRegistry.forEach(mesh => {
-        const initial = mesh.userData.initialPosition;
-        const direction = initial.clone().normalize();
-        if (direction.length() === 0) direction.set(0, 1, 0);
+        const initialWorldPosition = mesh.userData.initialWorldPosition;
+        const direction = mesh.userData.explosionDirection;
+        if (!initialWorldPosition || !direction || !mesh.parent) return;
 
-        mesh.position.copy(initial).addScaledVector(direction, factor * 2);
+        const targetWorldPosition = initialWorldPosition.clone().addScaledVector(direction, factor * 2);
+        mesh.position.copy(mesh.parent.worldToLocal(targetWorldPosition));
     });
     logToConsole(`Exploded view factor set to: ${factor}`);
 };
