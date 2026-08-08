@@ -2,13 +2,9 @@
 
 A lightweight HTTP/WebSocket server and browser UI for interactive multi-command planning (MCP) with a Three.js preview.
 
-![Architecture diagram](docs/architecture.svg)
-
 Overview
 
 This repository implements a small MCP runtime that accepts natural-language commands, plans actions with a LangGraph-based command workflow (optionally using an LLM), and sends executable 3D actions to a browser-based Three.js preview UI over WebSocket.
-
-This README has been rewritten to include quick start instructions, concise descriptions of the code components, usage examples, and a LangGraph node diagram showing how the command workflow routes messages through intent detection, clarification, planning, and dispatch.
 
 What this does
 
