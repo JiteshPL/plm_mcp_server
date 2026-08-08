@@ -98,7 +98,9 @@ function getClarification(text) {
   if (asksToHighlight && !hasColor) {
     return {
       reply: "Which highlight color would you like?",
-      choices: COLOR_OPTIONS.map(([label]) => ({ label, message: `${text} in ${label}` }))
+      // Include the exact hex value so color names such as Orange never need
+      // to be interpreted by the LLM.
+      choices: COLOR_OPTIONS.map(([label, hex]) => ({ label, message: `${text} with color ${hex}` }))
     };
   }
 

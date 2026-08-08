@@ -159,7 +159,16 @@ loader.load(
 
 window.mcp_highlight_components = function (args) {
     const targetSupplier = args.filterCriteria?.supplier?.toLowerCase();
-    const hexColor = parseInt(args.colorHex.replace('#', '0x'), 16);
+    const namedColors = {
+        blue: '#0084ff', red: '#ff0000', green: '#00c853',
+        yellow: '#ffd600', orange: '#ff6d00', purple: '#9c27b0'
+    };
+    const requestedColor = String(args.colorHex || '').trim().toLowerCase();
+    const colorHex = namedColors[requestedColor] || requestedColor;
+    const validColor = /^#[0-9a-f]{6}$/i.test(colorHex);
+    const hexColor = validColor ? parseInt(colorHex.slice(1), 16) : 0xff6d00;
+
+    if (!validColor) console.warn(`Invalid highlight color "${args.colorHex}". Using orange.`);
     let matchedCount = 0;
 
     partsRegistry.forEach(mesh => {
