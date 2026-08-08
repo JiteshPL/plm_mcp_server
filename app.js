@@ -208,6 +208,9 @@ window.mcp_set_camera_view = function (args) {
         case 'Top':
             camera.position.set(0, distance, 0.001);
             break;
+        case 'Bottom':
+            camera.position.set(0, -distance, 0.001);
+            break;
         case 'Front':
             camera.position.set(0, 0, distance);
             break;
@@ -225,7 +228,7 @@ window.mcp_set_camera_view = function (args) {
 };
 
 window.mcp_generate_exploded_view = function (args) {
-    const factor = args.explosionFactor || 0;
+    const factor = args.c || 0;
     partsRegistry.forEach(mesh => {
         const initial = mesh.userData.initialPosition;
         const direction = initial.clone().normalize();

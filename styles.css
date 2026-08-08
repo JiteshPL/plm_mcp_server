@@ -116,6 +116,27 @@ body {
   color: #e3ebf5;
 }
 
+.choice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.choice-btn {
+  background: #243b55;
+  border: 1px solid #3b82c4;
+  border-radius: 6px;
+  color: #eaf4ff;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 5px 8px;
+}
+
+.choice-btn:hover {
+  background: #315779;
+}
+
 .chat-input-container {
   display: flex;
   gap: 8px;

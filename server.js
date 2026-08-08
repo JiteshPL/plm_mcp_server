@@ -44,11 +44,11 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "set_camera_view",
-    description: "Repositions camera view in 3D canvas (Isometric, Top, Front, Right).",
+    description: "Repositions camera view in 3D canvas (Isometric, Top, Bottom, Front, Right).",
     inputSchema: {
       type: "object",
       properties: {
-        preset: { type: "string", enum: ["Isometric", "Top", "Front", "Right"] }
+        preset: { type: "string", enum: ["Isometric", "Top", "Bottom", "Front", "Right"] }
       },
       required: ["preset"]
     }
@@ -79,6 +79,67 @@ const TOOL_DEFINITIONS = [
   }
 ];
 
+const COLOR_OPTIONS = [
+  ["Blue", "#0084ff"], ["Red", "#ff0000"], ["Green", "#00c853"],
+  ["Yellow", "#ffd600"], ["Orange", "#ff6d00"], ["Purple", "#9c27b0"]
+];
+
+function getClarification(text) {
+  const lower = text.toLowerCase();
+  const hasColor = /#[0-9a-f]{3,8}\b/i.test(text) || COLOR_OPTIONS.some(([color]) => lower.includes(color.toLowerCase()));
+  const asksToHighlight = lower.includes("highlight") || lower.includes("vendor") || lower.includes("supplier");
+  const hasSupplier = /\bvendor[\s-]?[abc]\b/i.test(text);
+  if (asksToHighlight && !hasSupplier) {
+    return {
+      reply: "Which vendor's parts should I highlight?",
+      choices: ["Vendor-A", "Vendor-B", "Vendor-C"].map(vendor => ({ label: vendor, message: `Highlight ${vendor} parts` }))
+    };
+  }
+  if (asksToHighlight && !hasColor) {
+    return {
+      reply: "Which highlight color would you like?",
+      choices: COLOR_OPTIONS.map(([label]) => ({ label, message: `${text} in ${label}` }))
+    };
+  }
+
+  const asksToExplode = lower.includes("explode");
+  const hasExplosionFactor = /\b(?:by|factor|to)\s*(?:of\s*)?[0-2](?:\.\d+)?\b/i.test(lower);
+  if (asksToExplode && !hasExplosionFactor) {
+    return {
+      reply: "How far should I explode the assembly?",
+      choices: [0, 0.5, 1, 1.5, 2].map(factor => ({ label: `Factor ${factor}`, message: `Explode assembly by ${factor}` }))
+    };
+  }
+
+  const asksForSection = lower.includes("cross section") || lower.includes("slice") || lower.includes("cut");
+  const sectionPlanes = ["XY", "YZ", "ZX"];
+  const selectedPlane = sectionPlanes.find(plane => new RegExp(`\\b${plane.toLowerCase()}\\b`, "i").test(lower));
+  if (asksForSection && !selectedPlane) {
+    return {
+      reply: "Which cross-section plane should I use?",
+      choices: sectionPlanes.map(plane => ({ label: plane, message: `Create a ${plane} cross section` }))
+    };
+  }
+  const hasOffset = /\boffset\s*(?:of|to|at)?\s*-?\d+(?:\.\d+)?/i.test(lower);
+  if (asksForSection && !hasOffset) {
+    return {
+      reply: "What section offset should I use?",
+      choices: [-2, -1, 0, 1, 2].map(offset => ({ label: `Offset ${offset}`, message: `Create a ${selectedPlane} cross section at offset ${offset}` }))
+    };
+  }
+
+  const viewNames = ["isometric", "top", "bottom", "front", "right"];
+  const asksForView = /\b(view|camera)\b/.test(lower);
+  if (asksForView && !asksToExplode && !viewNames.some(view => lower.includes(view))) {
+    return {
+      reply: "Which camera view would you like?",
+      choices: viewNames.map(view => ({ label: view[0].toUpperCase() + view.slice(1), message: `Set view to ${view}` }))
+    };
+  }
+
+  return null;
+}
+
 // Fallback Keyword Matcher (Works instantly without external API/LLM)
 function parseLocalIntent(text) {
   const lower = text.toLowerCase();
@@ -90,9 +151,10 @@ function parseLocalIntent(text) {
     actions.push({ name: "generate_exploded_view", args: { explosionFactor: factor } });
   }
   
-  if (lower.includes("isometric") || lower.includes("top") || lower.includes("front") || lower.includes("right")) {
+  if (lower.includes("isometric") || lower.includes("top") || lower.includes("bottom") || lower.includes("front") || lower.includes("right")) {
     let preset = "Isometric";
     if (lower.includes("top")) preset = "Top";
+    if (lower.includes("bottom")) preset = "Bottom";
     if (lower.includes("front")) preset = "Front";
     if (lower.includes("right")) preset = "Right";
     actions.push({ name: "set_camera_view", args: { preset } });
@@ -103,16 +165,21 @@ function parseLocalIntent(text) {
     if (lower.includes("vendor-b") || lower.includes("vendor b")) supplier = "Vendor-B";
     if (lower.includes("vendor-c") || lower.includes("vendor c")) supplier = "Vendor-C";
     
-    let colorHex = "#0084ff";
-    if (lower.includes("blue")) colorHex = "#0084ff";
-    if (lower.includes("red")) colorHex = "#ff0000";
-    if (lower.includes("green")) colorHex = "#00ff00";
+    const selectedColor = COLOR_OPTIONS.find(([color]) => lower.includes(color.toLowerCase()));
+    const colorHex = selectedColor?.[1];
+
+    if (!colorHex) return null;
 
     actions.push({ name: "highlight_components", args: { filterCriteria: { supplier }, colorHex, isolateMode: false } });
   }
 
   if (lower.includes("cross section") || lower.includes("slice") || lower.includes("cut")) {
-    actions.push({ name: "create_cross_section", args: { plane: "ZX", offsetDistance: 0, enabled: true } });
+    let plane = "ZX";
+    if (lower.includes("xy")) plane = "XY";
+    if (lower.includes("yz")) plane = "YZ";
+    const offsetMatch = lower.match(/\boffset\s*(?:of|to|at)?\s*(-?\d+(?:\.\d+)?)/i);
+    const offsetDistance = offsetMatch ? parseFloat(offsetMatch[1]) : 0;
+    actions.push({ name: "create_cross_section", args: { plane, offsetDistance, enabled: true } });
   }
 
   return actions.length > 0 ? actions : null;
@@ -151,6 +218,13 @@ const httpServer = http.createServer(async (req, res) => {
 
         let executedTools = [];
         let reply = "";
+        const clarification = getClarification(message);
+
+        if (clarification) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ...clarification, executedTools }));
+          return;
+        }
 
         try {
           const tools = TOOL_DEFINITIONS.map(tool => ({
@@ -165,7 +239,7 @@ const httpServer = http.createServer(async (req, res) => {
           const response = await openai.chat.completions.create({
             model: MODEL_NAME,
             messages: [
-              { role: "system", content: "You are an AI CAD assistant. Use tool calls to control the 3D canvas." },
+              { role: "system", content: "You are an AI CAD assistant. Use tool calls to control the 3D canvas. Never guess a highlight color, camera preset, section offset, or explosion factor: ask the user to choose when any is missing." },
               ...history,
               { role: "user", content: message }
             ],

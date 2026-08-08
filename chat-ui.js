@@ -41,6 +41,9 @@ async function sendMessage() {
       thinkingEl.innerText = `Error: ${data.error}`;
     } else {
       thinkingEl.innerText = data.reply;
+      if (Array.isArray(data.choices) && data.choices.length > 0) {
+        appendChoiceButtons(thinkingEl, data.choices);
+      }
       chatHistory.push({ role: 'user', content: text });
       chatHistory.push({ role: 'assistant', content: data.reply });
     }
@@ -49,6 +52,22 @@ async function sendMessage() {
   } finally {
     if (sendBtn) sendBtn.disabled = false;
   }
+}
+
+function appendChoiceButtons(messageEl, choices) {
+  const choicesEl = document.createElement('div');
+  choicesEl.className = 'choice-buttons';
+
+  choices.forEach(({ label, message }) => {
+    const button = document.createElement('button');
+    button.className = 'choice-btn';
+    button.type = 'button';
+    button.innerText = label;
+    button.addEventListener('click', () => sendQuickAction(message));
+    choicesEl.appendChild(button);
+  });
+
+  messageEl.appendChild(choicesEl);
 }
 
 function appendMessage(role, text) {
