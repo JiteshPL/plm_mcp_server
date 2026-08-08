@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500">
+  <style>
+    .box { fill:#f7f9fc; stroke:#3b82f6; stroke-width:2; rx:8; }
+    .label { font: 14px 'Segoe UI', Roboto, Arial; fill:#0f172a; }
+    .small { font: 12px 'Segoe UI', Roboto, Arial; fill:#0f172a; }
+    .arrow { fill:none; stroke:#334155; stroke-width:2; marker-end:url(#arrowhead); }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#334155" />
+    </marker>
+  </defs>
+
+  <!-- UI -->
+  <rect x="40" y="60" width="220" height="120" class="box" />
+  <text x="150" y="85" class="label" text-anchor="middle">Browser UI</text>
+  <text x="150" y="105" class="small" text-anchor="middle">Three.js preview</text>
+  <text x="150" y="125" class="small" text-anchor="middle">Chat & clarification</text>
+
+  <!-- Server -->
+  <rect x="380" y="30" width="260" height="180" class="box" />
+  <text x="510" y="55" class="label" text-anchor="middle">MCP Server</text>
+  <text x="510" y="80" class="small" text-anchor="middle">HTTP / WebSocket</text>
+  <text x="510" y="100" class="small" text-anchor="middle">LangGraph / Command Graph</text>
+  <text x="510" y="120" class="small" text-anchor="middle">Intent parsing & tools</text>
+
+  <!-- LangGraph / Tools -->
+  <rect x="720" y="60" width="220" height="120" class="box" />
+  <text x="830" y="85" class="label" text-anchor="middle">Tooling</text>
+  <text x="830" y="105" class="small" text-anchor="middle">LangGraph / Tools / Plugins</text>
+
+  <!-- Arrows UI <-> Server -->
+  <path d="M260 120 L380 120" class="arrow" />
+  <path d="M380 110 L260 110" class="arrow" transform="scale(-1,1) translate(-640,0)" />
+  <text x="320" y="100" class="small" text-anchor="middle">WebSocket / HTTP</text>
+
+  <!-- Arrow Server -> Tools -->
+  <path d="M640 100 L720 100" class="arrow" />
+  <text x="680" y="90" class="small" text-anchor="middle">Commands / Intents</text>
+
+  <!-- Browser Bridge (overlay) -->
+  <rect x="280" y="220" width="200" height="60" rx="8" class="box" />
+  <text x="380" y="245" class="label" text-anchor="middle">Browser Bridge</text>
+  <text x="380" y="265" class="small" text-anchor="middle">WebSocket adapter</text>
+
+  <path d="M260 140 L320 220" class="arrow" />
+  <path d="M450 220 L520 140" class="arrow" />
+
+  <!-- Storage / External -->
+  <rect x="380" y="270" width="220" height="100" class="box" />
+  <text x="490" y="295" class="label" text-anchor="middle">External & Storage</text>
+  <text x="490" y="315" class="small" text-anchor="middle">Model services, DBs, APIs</text>
+
+  <path d="M510 210 L510 270" class="arrow" />
+  <text x="530" y="240" class="small">Model/API calls</text>
+
+  <!-- Footer note -->
+  <text x="50" y="460" class="small">Diagram: high-level component view. Arrows show typical message flow: UI &lt;-&gt; Server over WebSocket/HTTP, Server invokes LangGraph/tools, and external services provide models and persistence.</text>
+
+</svg>
