@@ -44,6 +44,38 @@ const loader = new THREE.GLTFLoader();
 // Sample Public 3D Engine Model from Khronos Group repository
 const MODEL_URL = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/Buggy/glTF-Binary/Buggy.glb';
 
+
+function focusOnPart(mesh) {
+
+    const box =
+        new THREE.Box3().setFromObject(mesh);
+
+    const center =
+        box.getCenter(new THREE.Vector3());
+
+    const size =
+        box.getSize(new THREE.Vector3());
+
+    const maxDim =
+        Math.max(size.x, size.y, size.z);
+
+    const distance =
+        Math.max(maxDim * 3, 2);
+
+    const direction =
+        new THREE.Vector3(1, 0.8, 1)
+            .normalize();
+
+    camera.position.copy(
+        center.clone()
+            .add(direction.multiplyScalar(distance))
+    );
+
+    controls.target.copy(center);
+
+    controls.update();
+}
+
 /**
  * Adjusts camera position and controls target to fit the entire model in the viewport.
  * @param {THREE.Object3D} object - The loaded CAD model root object
@@ -112,7 +144,6 @@ function assignSupplier(partName) {
     // Fallback if no keyword matches
     return 'Vendor-A';
 }
-
 loader.load(
     MODEL_URL,
     (gltf) => {
@@ -134,8 +165,16 @@ loader.load(
 
                 child.userData = {
                     partId: partName,
-                    supplier: supplier, // E.g., 'Vendor-A' for tyres, 'Vendor-B' for chassis
-                    originalColor: (Array.isArray(child.material) ? child.material[0] : child.material).color.getHex(),
+                    partName: partName,
+                    aliases: [
+                        partName.toLowerCase()
+                    ],
+                    supplier: supplier,
+                    originalColor: (
+                        Array.isArray(child.material) ?
+                        child.material[0] :
+                        child.material
+                    ).color.getHex(),
                     initialPosition: child.position.clone()
                 };
 
@@ -145,6 +184,7 @@ loader.load(
 
         fitModelToView(model, camera, controls, 1.3);
         configureExplosionData(model);
+        sendModelSummaryToServer();
         logToConsole(`Loaded assembly: ${partsRegistry.length} parts registered.`);
     },
     (xhr) => {
@@ -171,6 +211,57 @@ function configureExplosionData(model) {
         mesh.userData.initialWorldPosition = mesh.getWorldPosition(new THREE.Vector3());
         mesh.userData.explosionDirection = direction.normalize();
     });
+}
+
+function buildModelSummary(model) {
+    const assemblyBox = new THREE.Box3().setFromObject(model);
+    const size = assemblyBox.getSize(new THREE.Vector3());
+    const supplierBreakdown = {};
+
+    partsRegistry.forEach(mesh => {
+        const supplier = mesh.userData?.supplier || 'Unknown';
+        supplierBreakdown[supplier] = (supplierBreakdown[supplier] || 0) + 1;
+    });
+
+    const representativeParts = partsRegistry.slice(0, 12).map(mesh => {
+        const bounds = new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3());
+        return {
+            name: mesh.userData?.partId || mesh.name || 'Unnamed part',
+            supplier: mesh.userData?.supplier || 'Unknown',
+            size: {
+                x: Number(bounds.x.toFixed(2)),
+                y: Number(bounds.y.toFixed(2)),
+                z: Number(bounds.z.toFixed(2))
+            }
+        };
+    });
+
+    return {
+        partCount: partsRegistry.length,
+        boundingBox: {
+            size: {
+                x: Number(size.x.toFixed(2)),
+                y: Number(size.y.toFixed(2)),
+                z: Number(size.z.toFixed(2))
+            },
+            center: {
+                x: Number(assemblyBox.getCenter(new THREE.Vector3()).x.toFixed(2)),
+                y: Number(assemblyBox.getCenter(new THREE.Vector3()).y.toFixed(2)),
+                z: Number(assemblyBox.getCenter(new THREE.Vector3()).z.toFixed(2))
+            }
+        },
+        supplierBreakdown,
+        representativeParts,
+        complexity: partsRegistry.length > 40 ? 'high' : partsRegistry.length > 15 ? 'medium' : 'low'
+    };
+}
+
+function sendModelSummaryToServer() {
+    if (!browserSocket || browserSocket.readyState !== WebSocket.OPEN) return;
+    browserSocket.send(JSON.stringify({
+        type: 'model-summary',
+        summary: buildModelSummary(scene)
+    }));
 }
 
 // ==========================================
@@ -314,6 +405,81 @@ window.mcp_reset_scene = function () {
     resetScene();
 };
 
+function findPartMatches(partName) {
+
+    const query =
+        String(partName || "")
+            .trim()
+            .toLowerCase();
+
+    return partsRegistry.filter(mesh => {
+
+        const name =
+            String(
+                mesh.userData.partName ||
+                mesh.userData.partId ||
+                mesh.name ||
+                ""
+            ).toLowerCase();
+
+        return (
+            name === query ||
+            name.includes(query)
+        );
+    });
+}
+
+window.mcp_isolate_part = function (args) {
+
+    const matches =
+        findPartMatches(args.partName);
+
+    if (matches.length === 0) {
+
+        partsRegistry.forEach(mesh => {
+            mesh.visible = true;
+        });
+
+        logToConsole(
+            `Part '${args.partName}' not found.`
+        );
+
+        return;
+    }
+
+    partsRegistry.forEach(mesh => {
+
+        const selected =
+            matches.includes(mesh);
+
+        mesh.visible = selected;
+
+        if (selected) {
+
+            const color =
+                parseInt(
+                    (args.colorHex || "#ffd600")
+                        .replace("#", ""),
+                    16
+                );
+
+            if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(m =>
+                    m.color.setHex(color)
+                );
+            } else {
+                mesh.material.color.setHex(color);
+            }
+        }
+    });
+
+    focusOnPart(matches[0]);
+
+    logToConsole(
+        `Isolated ${matches.length} part(s) matching '${args.partName}'.`
+    );
+};
+
 function logToConsole(text) {
     const logEl = document.getElementById('log-output');
     logEl.innerHTML += `<div>> ${text}</div>`;
@@ -323,14 +489,36 @@ function logToConsole(text) {
 // ==========================================
 // 4. WEBSOCKET BRIDGE
 // ==========================================
-function connectWebSocket() {
-    const socket = new WebSocket('ws://localhost:8080');
+let browserSocket = null;
+let currentSocketPortIndex = 0;
 
-    socket.onopen = () => {
-        logToConsole('Connected to MCP Server on ws://localhost:8080');
+function getCandidateServerPorts() {
+    const ports = [window.location.port, '8080', '8081', '8082', '8083', '8084']
+        .filter(Boolean)
+        .map(value => String(value));
+    return [...new Set(ports)];
+}
+
+function connectWebSocket() {
+    const ports = getCandidateServerPorts();
+    const port = ports[currentSocketPortIndex % ports.length];
+    browserSocket = new WebSocket(`ws://localhost:${port}`);
+
+    browserSocket.onopen = () => {
+        currentSocketPortIndex = 0;
+        logToConsole(`Connected to MCP Server on ws://localhost:${port}`);
+        sendModelSummaryToServer();
     };
 
-    socket.onmessage = (event) => {
+    browserSocket.onerror = () => {
+        currentSocketPortIndex = (currentSocketPortIndex + 1) % ports.length;
+        if (currentSocketPortIndex === 0) {
+            logToConsole(`Unable to connect to MCP server. Tried ports: ${ports.join(', ')}`);
+        }
+        setTimeout(connectWebSocket, 1000);
+    };
+
+    browserSocket.onmessage = (event) => {
         try {
             const message = JSON.parse(event.data);
             // New servers send an ordered batch. Keep accepting the old single
@@ -342,7 +530,7 @@ function connectWebSocket() {
         }
     };
 
-    socket.onclose = () => setTimeout(connectWebSocket, 3000);
+    browserSocket.onclose = () => setTimeout(connectWebSocket, 3000);
 }
 
 const actionHandlers = {
@@ -350,7 +538,8 @@ const actionHandlers = {
     highlight_components: window.mcp_highlight_components,
     set_camera_view: window.mcp_set_camera_view,
     generate_exploded_view: window.mcp_generate_exploded_view,
-    create_cross_section: window.mcp_create_cross_section
+    create_cross_section: window.mcp_create_cross_section,
+    isolate_part: window.mcp_isolate_part
 };
 
 let actionQueue = Promise.resolve();
