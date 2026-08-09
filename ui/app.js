@@ -644,7 +644,7 @@ window.mcp_find_related_parts = function (args) {
             .toLowerCase();
 
     const maxResults =
-        Number(args.maxResults || 5);
+        Number(args.maxResults || 20);
 
     const maxDistance =
         args.maxDistance !== undefined
@@ -726,20 +726,6 @@ window.mcp_find_related_parts = function (args) {
     // ---------------------------------------
     // Focus camera
     // ---------------------------------------
-console.log(
-    "Total registered parts:",
-    partsRegistry.length
-);
-
-console.log(
-    "Target parts:",
-    matches.length
-);
-
-console.log(
-    "Neighbours:",
-    neighborMeshes.length
-);
     // focusOnParts([
     //     ...matches,
     //     ...neighborMeshes
