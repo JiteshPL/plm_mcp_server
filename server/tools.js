@@ -97,6 +97,34 @@ export const TOOL_DEFINITIONS = [{
         },
         required: ["partName"]
     }
+},
+{
+    name: "find_related_parts",
+    description:
+        "Find components spatially near a specified part in the 3D assembly. " +
+        "Use this when the user asks what parts are near, around, adjacent to, " +
+        "or related spatially to a specific part.",
+
+    inputSchema: {
+        type: "object",
+        properties: {
+            partName: {
+                type: "string",
+                description: "Name of the reference part."
+            },
+            maxResults: {
+                type: "number",
+                description:
+                    "Maximum number of nearby parts to return. Default is 5."
+            },
+            maxDistance: {
+                type: "number",
+                description:
+                    "Maximum spatial distance from the reference part."
+            }
+        },
+        required: ["partName"]
+    }
 }
 ];
 

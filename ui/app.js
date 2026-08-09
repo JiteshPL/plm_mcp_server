@@ -45,7 +45,7 @@ const loader = new THREE.GLTFLoader();
 const MODEL_URL = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/Buggy/glTF-Binary/Buggy.glb';
 
 
-function focusOnPart(mesh) {
+function focusOnParts(mesh) {
 
     const box =
         new THREE.Box3().setFromObject(mesh);
@@ -463,21 +463,312 @@ window.mcp_isolate_part = function (args) {
                     16
                 );
 
-            if (Array.isArray(mesh.material)) {
-                mesh.material.forEach(m =>
-                    m.color.setHex(color)
-                );
-            } else {
-                mesh.material.color.setHex(color);
-            }
+            // if (Array.isArray(mesh.material)) {
+            //     mesh.material.forEach(m =>
+            //         m.color.setHex(color)
+            //     );
+            // } else {
+            //     mesh.material.color.setHex(color);
+            // }
         }
     });
 
-    focusOnPart(matches[0]);
+    focusOnParts(matches);
 
     logToConsole(
         `Isolated ${matches.length} part(s) matching '${args.partName}'.`
     );
+};
+
+function findSpatialNeighbors(
+    targetMeshes,
+    maxResults = 20,
+    maxDistance = Infinity
+) {
+    const targetBox = new THREE.Box3();
+
+    // Create a combined bounding box for all target parts
+    targetMeshes.forEach(mesh => {
+        const box = new THREE.Box3().setFromObject(mesh);
+        targetBox.union(box);
+    });
+
+    const candidates = [];
+
+    partsRegistry.forEach(candidate => {
+
+        // Don't return the target itself
+        if (targetMeshes.includes(candidate)) {
+            return;
+        }
+
+        const candidateBox =
+            new THREE.Box3().setFromObject(candidate);
+
+        const distance =
+            getBoxDistance(targetBox, candidateBox);
+
+        if (distance <= maxDistance) {
+
+            candidates.push({
+                mesh: candidate,
+                distance
+            });
+        }
+    });
+
+    // Closest parts first
+    candidates.sort(
+        (a, b) => a.distance - b.distance
+    );
+
+    return candidates.slice(0, maxResults);
+}
+
+function getBoxDistance(boxA, boxB) {
+
+    const dx = Math.max(
+        boxA.min.x - boxB.max.x,
+        boxB.min.x - boxA.max.x,
+        0
+    );
+
+    const dy = Math.max(
+        boxA.min.y - boxB.max.y,
+        boxB.min.y - boxA.max.y,
+        0
+    );
+
+    const dz = Math.max(
+        boxA.min.z - boxB.max.z,
+        boxB.min.z - boxA.max.z,
+        0
+    );
+
+    return Math.sqrt(
+        dx * dx +
+        dy * dy +
+        dz * dz
+    );
+}
+
+function addPartIfValid(object, result) {
+
+    if (!object) {
+        return;
+    }
+
+    if (!object.isMesh) {
+        return;
+    }
+
+    if (!object.userData?.partId) {
+        return;
+    }
+
+    result.add(object);
+}
+
+   function highlightMesh(mesh, colorHex = 0xffa500) {
+
+    if (!mesh || !mesh.material) {
+        return;
+    }
+
+    // Save original material/color only once
+    if (!mesh.userData.originalMaterial) {
+
+        if (Array.isArray(mesh.material)) {
+            mesh.userData.originalMaterial =
+                mesh.material.map(material => material.clone());
+        } else {
+            mesh.userData.originalMaterial =
+                mesh.material.clone();
+        }
+    }
+
+    if (Array.isArray(mesh.material)) {
+
+        mesh.material.forEach(material => {
+
+            if (material.color) {
+                material.color.setHex(colorHex);
+            }
+
+            if (material.emissive) {
+                material.emissive.setHex(colorHex);
+                material.emissiveIntensity = 0.5;
+            }
+        });
+
+    } else {
+
+        if (mesh.material.color) {
+            mesh.material.color.setHex(colorHex);
+        }
+
+        if (mesh.material.emissive) {
+            mesh.material.emissive.setHex(colorHex);
+            mesh.material.emissiveIntensity = 0.5;
+        }
+    }
+}
+
+function removeMeshHighlight(mesh) {
+
+    if (!mesh || !mesh.userData.originalMaterial) {
+        return;
+    }
+
+    if (Array.isArray(mesh.userData.originalMaterial)) {
+
+        mesh.material =
+            mesh.userData.originalMaterial.map(
+                material => material.clone()
+            );
+
+    } else {
+
+        mesh.material =
+            mesh.userData.originalMaterial.clone();
+    }
+
+    delete mesh.userData.originalMaterial;
+}
+
+window.mcp_find_related_parts = function (args) {
+
+    const partName =
+        String(args.partName || "")
+            .trim()
+            .toLowerCase();
+
+    const maxResults =
+        Number(args.maxResults || 5);
+
+    const maxDistance =
+        args.maxDistance !== undefined
+            ? Number(args.maxDistance)
+            : Infinity;
+
+    if (!partName) {
+        logToConsole("No part name provided.");
+        return [];
+    }
+
+    // Remove previous highlights
+    partsRegistry.forEach(mesh => {
+        removeMeshHighlight(mesh);
+    });
+
+    // Find target part(s)
+    const matches = findPartMatches(partName);
+
+    if (matches.length === 0) {
+        logToConsole(
+            `Part '${args.partName}' was not found.`
+        );
+        return [];
+    }
+
+    // Find spatial neighbours
+    const neighbors = findSpatialNeighbors(
+        matches,
+        maxResults,
+        maxDistance
+    );
+
+    // Get actual THREE meshes
+    const neighborMeshes =
+        neighbors.map(item => item.mesh);
+
+    // ---------------------------------------
+    // Target + neighbours are the ONLY visible
+    // ---------------------------------------
+
+    const visibleParts = new Set([
+        ...matches,
+        ...neighborMeshes
+    ]);
+
+    partsRegistry.forEach(mesh => {
+
+        mesh.visible = visibleParts.has(mesh);
+
+    });
+
+    // ---------------------------------------
+    // Highlight target
+    // ---------------------------------------
+
+    matches.forEach(mesh => {
+
+        highlightMesh(
+            mesh,
+            0x00ff00
+        );
+
+    });
+
+    // ---------------------------------------
+    // Highlight neighbours
+    // ---------------------------------------
+
+    neighborMeshes.forEach(mesh => {
+
+        highlightMesh(
+            mesh,
+            0xffa500
+        );
+
+    });
+
+    // ---------------------------------------
+    // Focus camera
+    // ---------------------------------------
+console.log(
+    "Total registered parts:",
+    partsRegistry.length
+);
+
+console.log(
+    "Target parts:",
+    matches.length
+);
+
+console.log(
+    "Neighbours:",
+    neighborMeshes.length
+);
+    // focusOnParts([
+    //     ...matches,
+    //     ...neighborMeshes
+    // ]);
+
+    // ---------------------------------------
+    // Return information to agent
+    // ---------------------------------------
+
+    const result = neighbors.map(item => ({
+        partName:
+            item.mesh.userData?.partName ||
+            item.mesh.userData?.partId ||
+            item.mesh.name,
+
+        partId:
+            item.mesh.userData?.partId ||
+            item.mesh.name,
+
+        distance: Number(
+            item.distance.toFixed(3)
+        )
+    }));
+
+    logToConsole(
+        `Showing target + ${result.length} spatial neighbours.`
+    );
+
+    return result;
 };
 
 function logToConsole(text) {
@@ -539,7 +830,8 @@ const actionHandlers = {
     set_camera_view: window.mcp_set_camera_view,
     generate_exploded_view: window.mcp_generate_exploded_view,
     create_cross_section: window.mcp_create_cross_section,
-    isolate_part: window.mcp_isolate_part
+    isolate_part: window.mcp_isolate_part,
+    find_related_parts:window.mcp_find_related_parts,
 };
 
 let actionQueue = Promise.resolve();
