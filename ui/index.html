@@ -1,15 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3D PLM Viewer - AI Copilot Dashboard</title>
   <link rel="stylesheet" href="styles.css">
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script type="importmap">
+    {
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
 </head>
+
 <body>
   <div class="app-container">
     <aside id="sidebar">
@@ -21,38 +27,50 @@
         <!-- <span class="subtitle">Natural Language & One-Click Control</span> -->
       </div>
 
-      <section class="capabilities" aria-label="Agent capabilities">
-        <span class="section-title">AGENT CAPABILITIES</span>
-        <ul class="capability-list">
-          <li title="Restore the initial scene"><code>Reset</code></li>
-          <li title="Highlight vendor parts"><code>Highlight</code></li>
-          <li title="Change camera angle"><code>Camera</code></li>
-          <li title="Explode the assembly"><code>Explode</code></li>
-          <li title="Create a cross section"><code>Section</code></li>
-        </ul>
-      </section>
+<div id="agent-status" class="agent-status hidden">
 
-      <!-- <div class="preset-section">
-        <span class="section-title">QUICK OPTIONS</span>
-        <div class="options-grid">
-          <button class="chip-btn" onclick="sendQuickAction('Explode assembly by 1.2')">💥 Explode View</button>
-          <button class="chip-btn" id="btnVendorA">🔵 Vendor-A (Body)</button>
-          <button class="chip-btn" id="btnVendorB">🔴 Vendor-B (Tyres)</button>
-          <button class="chip-btn" onclick="sendQuickAction('Set view to Top')">📐 Top View</button>
-          <button class="chip-btn" onclick="sendQuickAction('Set view to Isometric')">🎲 Isometric View</button>
-          <button class="chip-btn" onclick="sendQuickAction('Create ZX cross section')">✂️ Cross Section</button>
-          <button class="chip-btn btn-reset-chip" onclick="triggerReset()">🔄 Reset All</button>
+    <div class="agent-status-header">
+
+        <div class="agent-title">
+            <span class="agent-icon">🤖</span>
+            <span>PLM Copilot</span>
         </div>
-      </div> -->
+
+        <div class="agent-status-right">
+
+            <span id="agent-status-state">
+                Working...
+            </span>
+
+            <button
+                id="agent-status-close"
+                type="button"
+                onclick="closeAgentStatus()"
+                title="Close agent activity">
+                ×
+            </button>
+
+        </div>
+
+    </div>
+
+    <div id="agent-steps"></div>
+
+</div>
+
 
       <div id="chat-messages">
-        <div class="message assistant">
-          Hello! I am your PLM Copilot. Type a command or click any quick option above to interact with the model.
+
+        <div class="message assistant welcome-message">
+          <strong>PLM AI Copilot</strong>
+          <span>Ask me to inspect, find, isolate, or modify the 3D assembly.</span>
         </div>
+
       </div>
 
       <div class="chat-input-container">
-        <input type="text" id="user-input" placeholder="Ask PLM Copilot..." onkeydown="if(event.key==='Enter') sendMessage()" />
+        <input type="text" id="user-input" placeholder="Ask PLM Copilot..."
+          onkeydown="if(event.key==='Enter') sendMessage()" />
         <button id="send-btn" onclick="sendMessage()">Send</button>
       </div>
       <button id="clear-chat-btn" onclick="clearChatWindow()">Clear Chat</button>
@@ -63,7 +81,8 @@
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
   <script src="chat-ui.js"></script>
 </body>
+
 </html>

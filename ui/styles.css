@@ -13,7 +13,7 @@ body {
 }
 
 #sidebar {
-  width: 360px;
+  width: 450px;
   max-width: 32vw;
   background: #171b21;
   border-right: 1px solid #2a2f38;
@@ -21,6 +21,27 @@ body {
   flex-direction: column;
   padding: 18px;
   box-sizing: border-box;
+}
+
+#chat-messages {
+    flex: 1 1 auto;
+
+    min-height: 0;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    width: 100%;
+
+    box-sizing: border-box;
+}
+
+.chat-input-container {
+    display: flex;
+
+    gap: 6px;
+
+    padding: 8px;
 }
 
 .sidebar-header {
@@ -286,4 +307,431 @@ body {
   background: #334155;
   color: #f8fafc;
   border-color: #94a3b8;
+}
+
+/* ==========================================
+   AGENT ACTIVITY
+   ========================================== */
+
+.agent-status {
+    margin: 10px 12px 12px;
+
+    padding: 12px 14px;
+
+    border: 1px solid #354252;
+    border-radius: 10px;
+
+    background:
+        linear-gradient(
+            145deg,
+            #18202a,
+            #121820
+        );
+
+    box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.25);
+
+    font-size: 13px;
+
+    max-height: 150px;
+
+    overflow-y: auto;
+}
+
+.agent-status.hidden {
+    display: none;
+}
+
+.agent-status-header {
+    display: flex;
+    align-items: center;
+
+    gap: 8px;
+
+    padding-bottom: 8px;
+
+    margin-bottom: 4px;
+
+    border-bottom:
+        1px solid #2b3542;
+}
+
+.agent-icon {
+    font-size: 15px;
+}
+
+.agent-status-header > span:nth-child(2) {
+    font-weight: 600;
+    color: #e5edf7;
+}
+
+#agent-status-state {
+    margin-left: auto;
+
+    font-size: 11px;
+
+    color: #8d9aaa;
+}
+
+#agent-steps {
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+}
+
+.agent-step {
+    display: flex;
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 4px 0;
+
+    color: #aebaca;
+}
+
+.agent-step-icon {
+    width: 18px;
+
+    text-align: center;
+}
+
+.agent-step.completed {
+    color: #8bd99a;
+}
+
+.agent-step.error {
+    color: #ff8b8b;
+}
+
+.agent-step.active {
+    color: #c8d5e5;
+}
+
+.example-commands {
+    margin-top: 12px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.example-commands div {
+    padding: 7px 9px;
+
+    border-radius: 6px;
+
+    background: #202832;
+
+    color: #cbd5e1;
+
+    font-size: 12px;
+
+    line-height: 1.4;
+}
+.welcome-message {
+    padding: 12px 13px !important;
+}
+
+.welcome-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 7px;
+    color: #f1f5f9;
+}
+
+.welcome-text {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #aeb8c5;
+}
+
+.try-label {
+    margin-top: 12px;
+    margin-bottom: 6px;
+
+    font-size: 11px;
+    font-weight: 600;
+
+    color: #7f8da0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.example-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.example-chips span {
+    padding: 5px 8px;
+
+    border-radius: 5px;
+
+    background: #202a36;
+    border: 1px solid #2d3a48;
+
+    color: #bfcbd8;
+
+    font-size: 11px;
+
+    white-space: nowrap;
+}
+
+/* =========================================================
+   MAIN APPLICATION LAYOUT
+   ========================================================= */
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+.app-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+
+    overflow: hidden;
+}
+
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+
+#sidebar {
+    flex: 0 0 360px;
+    width: 360px;
+    max-width: 360px;
+
+    height: 100vh;
+
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
+}
+
+
+/* =========================================================
+   3D CANVAS
+   ========================================================= */
+
+#canvas-container {
+    flex: 1 1 auto;
+
+    min-width: 0;
+    min-height: 0;
+
+    width: auto;
+    height: 100%;
+
+    position: relative;
+
+    overflow: hidden;
+}
+
+/* Three.js canvas must stay inside available area */
+#canvas-container canvas {
+    display: block;
+
+    width: 100%;
+    height: 100%;
+}
+
+#canvas-container {
+    min-width: 0;
+}
+
+.welcome-message {
+    padding: 10px 12px !important;
+
+    font-size: 12px !important;
+
+    line-height: 1.4;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 4px;
+}
+
+.welcome-message strong {
+    font-size: 13px;
+
+    color: #f1f5f9;
+}
+
+.welcome-message span {
+    color: #9da9b8;
+}
+
+/* =========================================================
+   AGENT STATUS PANEL
+   ========================================================= */
+
+.agent-status {
+    flex: 0 0 auto;
+
+    margin: 0 0 8px 0;
+
+    padding: 9px 10px;
+
+    background: #151b23;
+
+    border: 1px solid #344354;
+
+    border-radius: 8px;
+
+    box-sizing: border-box;
+
+    max-height: 150px;
+
+    overflow-y: auto;
+
+    font-size: 12px;
+}
+
+.agent-status.hidden {
+    display: none;
+}
+
+
+/* Header */
+
+.agent-status-header {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 8px;
+
+    padding-bottom: 6px;
+
+    border-bottom: 1px solid #29333f;
+}
+
+.agent-title {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    color: #e5edf7;
+
+    font-weight: 600;
+}
+
+.agent-icon {
+    font-size: 14px;
+}
+
+.agent-status-right {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+}
+
+#agent-status-state {
+    color: #8795a6;
+
+    font-size: 10px;
+}
+
+
+/* Close button */
+
+#agent-status-close {
+    width: 20px;
+    height: 20px;
+
+    padding: 0;
+
+    border: none;
+
+    background: transparent;
+
+    color: #7f8b9a;
+
+    font-size: 17px;
+
+    line-height: 18px;
+
+    cursor: pointer;
+
+    border-radius: 4px;
+}
+
+#agent-status-close:hover {
+    background: #29333f;
+
+    color: #ffffff;
+}
+
+
+/* Steps */
+
+#agent-steps {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 2px;
+
+    padding-top: 5px;
+}
+
+.agent-step {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    padding: 3px 0;
+
+    color: #aeb9c7;
+
+    font-size: 11px;
+}
+
+.agent-step-icon {
+    width: 16px;
+
+    flex: 0 0 16px;
+
+    text-align: center;
+}
+
+.agent-step-message {
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+.agent-step.completed {
+    color: #7ed890;
+}
+
+.agent-step.active {
+    color: #c9d5e2;
+}
+
+.agent-step.error {
+    color: #ff8585;
 }

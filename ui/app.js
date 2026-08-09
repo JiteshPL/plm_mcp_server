@@ -1,45 +1,279 @@
+console.log("PLM app.js STARTED");
+
+import * as THREE from "three";
+
+import { OrbitControls }
+    from "three/addons/controls/OrbitControls.js";
+
+import { EffectComposer }
+    from "three/addons/postprocessing/EffectComposer.js";
+
+import { RenderPass }
+    from "three/addons/postprocessing/RenderPass.js";
+
+import { OutlinePass }
+    from "three/addons/postprocessing/OutlinePass.js";
+
+import { GLTFLoader }
+    from "three/addons/loaders/GLTFLoader.js";
+
+console.log("THREE loaded:", THREE.REVISION);
+console.log("OrbitControls loaded:", typeof OrbitControls);
+console.log("GLTFLoader loaded:", typeof GLTFLoader);
+
 // ==========================================
 // 1. THREE.JS SCENE SETUP
 // ==========================================
-const container = document.getElementById('canvas-container');
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1e1e1e);
 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+const container =
+    document.getElementById('canvas-container');
+
+const scene = new THREE.Scene();
+
+scene.background =
+    new THREE.Color(0x1e1e1e);
+
+
+// ==========================================
+// CAMERA
+// ==========================================
+
+const camera =
+    new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+    );
+
 camera.position.set(5, 4, 7);
 
-const renderer = new THREE.WebGLRenderer({
-    antialias: true
-});
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.localClippingEnabled = true;
-container.appendChild(renderer.domElement);
 
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
+// ==========================================
+// RENDERER
+// ==========================================
+
+const renderer =
+    new THREE.WebGLRenderer({
+        antialias: true
+    });
+
+renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+);
+
+renderer.setPixelRatio(
+    window.devicePixelRatio
+);
+
+renderer.localClippingEnabled = true;
+
+
+// IMPORTANT after Three.js upgrade
+renderer.outputColorSpace =
+    THREE.SRGBColorSpace;
+
+// Start without tone mapping.
+// This gives a brighter CAD-style appearance.
+renderer.toneMapping =
+    THREE.NoToneMapping;
+
+renderer.toneMappingExposure = 1.0;
+
+container.appendChild(
+    renderer.domElement
+);
+
+
+// ==========================================
+// POST PROCESSING
+// ==========================================
+
+const composer =
+    new EffectComposer(renderer);
+
+const renderPass =
+    new RenderPass(
+        scene,
+        camera
+    );
+
+composer.addPass(renderPass);
+
+
+// ==========================================
+// TARGET OUTLINE
+// ==========================================
+
+const targetOutlinePass =
+    new OutlinePass(
+        new THREE.Vector2(
+            window.innerWidth,
+            window.innerHeight
+        ),
+        scene,
+        camera
+    );
+
+targetOutlinePass.edgeStrength = 6;
+targetOutlinePass.edgeGlow = 0.5;
+targetOutlinePass.edgeThickness = 3;
+
+targetOutlinePass.visibleEdgeColor.set(
+    0x00ffff
+);
+
+targetOutlinePass.hiddenEdgeColor.set(
+    0x00ffff
+);
+
+composer.addPass(
+    targetOutlinePass
+);
+
+
+// ==========================================
+// RELATED PART OUTLINE
+// ==========================================
+
+const relatedOutlinePass =
+    new OutlinePass(
+        new THREE.Vector2(
+            window.innerWidth,
+            window.innerHeight
+        ),
+        scene,
+        camera
+    );
+
+relatedOutlinePass.edgeStrength = 2;
+relatedOutlinePass.edgeGlow = 0;
+relatedOutlinePass.edgeThickness = 1;
+
+relatedOutlinePass.visibleEdgeColor.set(
+    0xffa500
+);
+
+relatedOutlinePass.hiddenEdgeColor.set(
+    0xffa500
+);
+
+composer.addPass(
+    relatedOutlinePass
+);
+
+
+// ==========================================
+// ORBIT CONTROLS
+// ==========================================
+
+const controls =
+    new OrbitControls(
+        camera,
+        renderer.domElement
+    );
+
 controls.enableDamping = true;
 
-// Lighting for Realistic Materials
-scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
-dirLight1.position.set(10, 20, 10);
-scene.add(dirLight1);
 
-const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
-dirLight2.position.set(-10, -10, -10);
-scene.add(dirLight2);
+// ==========================================
+// LIGHTING
+// ==========================================
 
-const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
-scene.add(gridHelper);
+// Soft overall illumination
+const ambientLight =
+    new THREE.AmbientLight(
+        0xffffff,
+        1.5
+    );
 
-// Dynamic Cross-Section Plane
-const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 2);
+scene.add(
+    ambientLight
+);
+
+
+// Main light - top/front
+const dirLight1 =
+    new THREE.DirectionalLight(
+        0xffffff,
+        2.5
+    );
+
+dirLight1.position.set(
+    10,
+    20,
+    10
+);
+
+scene.add(
+    dirLight1
+);
+
+
+// Fill light - opposite side
+const dirLight2 =
+    new THREE.DirectionalLight(
+        0xffffff,
+        1.2
+    );
+
+dirLight2.position.set(
+    -10,
+    10,
+    -10
+);
+
+scene.add(
+    dirLight2
+);
+
+
+// Soft hemisphere illumination
+const hemisphereLight =
+    new THREE.HemisphereLight(
+        0xffffff,
+        0x444444,
+        1.5
+    );
+
+scene.add(
+    hemisphereLight
+);
+
+
+// ==========================================
+// GRID
+// ==========================================
+
+const gridHelper =
+    new THREE.GridHelper(
+        20,
+        20,
+        0x444444,
+        0x222222
+    );
+
+scene.add(
+    gridHelper
+);
+
+
+// ==========================================
+// DYNAMIC CROSS-SECTION PLANE
+// ==========================================
+
+const clipPlane =
+    new THREE.Plane(
+        new THREE.Vector3(0, -1, 0),
+        2
+    );
 
 // ==========================================
 // 2. LOAD REALISTIC GLTF ENGINE / CAR MODEL
 // ==========================================
 const partsRegistry = [];
-const loader = new THREE.GLTFLoader();
+const loader = new GLTFLoader();
 
 // Sample Public 3D Engine Model from Khronos Group repository
 const MODEL_URL = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/Buggy/glTF-Binary/Buggy.glb';
@@ -269,6 +503,7 @@ function sendModelSummaryToServer() {
 // ==========================================
 
 window.mcp_highlight_components = function (args) {
+    clearOutline();
     const targetSupplier = args.filterCriteria?.supplier?.toLowerCase();
     const namedColors = {
         blue: '#0084ff', red: '#ff0000', green: '#00c853',
@@ -314,6 +549,7 @@ window.mcp_highlight_components = function (args) {
 };
 
 window.mcp_set_camera_view = function (args) {
+    clearOutline();
     // Calculate current scene bounds
     const box = new THREE.Box3().setFromObject(scene);
     const size = box.getSize(new THREE.Vector3());
@@ -348,6 +584,7 @@ window.mcp_set_camera_view = function (args) {
 };
 
 window.mcp_generate_exploded_view = function (args) {
+    clearOutline();
     const factor = Number(args.explosionFactor) || 0;
     partsRegistry.forEach(mesh => {
         const initialWorldPosition = mesh.userData.initialWorldPosition;
@@ -361,6 +598,7 @@ window.mcp_generate_exploded_view = function (args) {
 };
 
 window.mcp_create_cross_section = function (args) {
+    clearOutline();
     const enabled = args.enabled ?? true;
     const offset = args.offsetDistance ?? 0;
 
@@ -389,6 +627,7 @@ window.mcp_create_cross_section = function (args) {
 };
 
 function resetScene() {
+    clearOutline();
     partsRegistry.forEach(mesh => {
         mesh.material.color.setHex(mesh.userData.originalColor);
         mesh.position.copy(mesh.userData.initialPosition);
@@ -430,6 +669,8 @@ function findPartMatches(partName) {
 }
 
 window.mcp_isolate_part = function (args) {
+    clearOutline();
+    resetAllPartOpacity();
 
     const matches =
         findPartMatches(args.partName);
@@ -482,14 +723,14 @@ window.mcp_isolate_part = function (args) {
 
 function findSpatialNeighbors(
     targetMeshes,
-    maxResults = 20,
-    maxDistance = Infinity
+    maxDistance = 1
 ) {
     const targetBox = new THREE.Box3();
 
-    // Create a combined bounding box for all target parts
     targetMeshes.forEach(mesh => {
-        const box = new THREE.Box3().setFromObject(mesh);
+        const box =
+            new THREE.Box3().setFromObject(mesh);
+
         targetBox.union(box);
     });
 
@@ -497,7 +738,6 @@ function findSpatialNeighbors(
 
     partsRegistry.forEach(candidate => {
 
-        // Don't return the target itself
         if (targetMeshes.includes(candidate)) {
             return;
         }
@@ -506,7 +746,10 @@ function findSpatialNeighbors(
             new THREE.Box3().setFromObject(candidate);
 
         const distance =
-            getBoxDistance(targetBox, candidateBox);
+            getBoxDistance(
+                targetBox,
+                candidateBox
+            );
 
         if (distance <= maxDistance) {
 
@@ -517,12 +760,11 @@ function findSpatialNeighbors(
         }
     });
 
-    // Closest parts first
     candidates.sort(
         (a, b) => a.distance - b.distance
     );
 
-    return candidates.slice(0, maxResults);
+    return candidates;
 }
 
 function getBoxDistance(boxA, boxB) {
@@ -636,20 +878,64 @@ function removeMeshHighlight(mesh) {
     delete mesh.userData.originalMaterial;
 }
 
-window.mcp_find_related_parts = function (args) {
 
+function outlineMeshes(meshes) {
+
+    outlinePass.selectedObjects = meshes.filter(
+        mesh =>
+            mesh &&
+            typeof mesh.updateWorldMatrix === "function"
+    );
+}
+
+function clearOutline() {
+    targetOutlinePass.selectedObjects.length = 0;
+    relatedOutlinePass.selectedObjects.length = 0;
+}
+
+function setMeshOpacity(object, opacity) {
+
+    object.traverse(child => {
+
+        if (!child.isMesh || !child.material) {
+            return;
+        }
+
+        const materials = Array.isArray(child.material)
+            ? child.material
+            : [child.material];
+
+        materials.forEach(material => {
+
+            material.transparent = opacity < 1;
+            material.opacity = opacity;
+
+            // Important for transparent GLTF materials
+            material.depthWrite = opacity >= 1;
+
+            material.needsUpdate = true;
+        });
+    });
+}
+
+function resetAllPartOpacity() {
+
+    partsRegistry.forEach(mesh => {
+        setMeshOpacity(mesh, 1.0);
+    });
+}
+
+window.mcp_find_related_parts = function (args) {
+resetAllPartOpacity();
     const partName =
         String(args.partName || "")
             .trim()
             .toLowerCase();
 
-    const maxResults =
-        Number(args.maxResults || 20);
-
     const maxDistance =
         args.maxDistance !== undefined
             ? Number(args.maxDistance)
-            : Infinity;
+            : 1;
 
     if (!partName) {
         logToConsole("No part name provided.");
@@ -661,31 +947,30 @@ window.mcp_find_related_parts = function (args) {
         removeMeshHighlight(mesh);
     });
 
-    // Find target part(s)
-    const matches = findPartMatches(partName);
+    // Find target
+    const matches =
+        findPartMatches(partName);
 
     if (matches.length === 0) {
+
         logToConsole(
             `Part '${args.partName}' was not found.`
         );
+
         return [];
     }
 
-    // Find spatial neighbours
-    const neighbors = findSpatialNeighbors(
-        matches,
-        maxResults,
-        maxDistance
-    );
+    // Find ALL spatial neighbours within distance
+    const neighbors =
+        findSpatialNeighbors(
+            matches,
+            maxDistance
+        );
 
-    // Get actual THREE meshes
     const neighborMeshes =
         neighbors.map(item => item.mesh);
 
-    // ---------------------------------------
-    // Target + neighbours are the ONLY visible
-    // ---------------------------------------
-
+    // Target + neighbours only
     const visibleParts = new Set([
         ...matches,
         ...neighborMeshes
@@ -693,47 +978,50 @@ window.mcp_find_related_parts = function (args) {
 
     partsRegistry.forEach(mesh => {
 
-        mesh.visible = visibleParts.has(mesh);
+        mesh.visible =
+            visibleParts.has(mesh);
 
     });
 
-    // ---------------------------------------
-    // Highlight target
-    // ---------------------------------------
+    // // Target = green
+    // matches.forEach(mesh => {
 
-    matches.forEach(mesh => {
+    //     highlightMesh(
+    //         mesh,
+    //         0x00ff00
+    //     );
 
-        highlightMesh(
-            mesh,
-            0x00ff00
-        );
+    // });
 
-    });
+    // // Neighbours = orange
+    // neighborMeshes.forEach(mesh => {
 
-    // ---------------------------------------
-    // Highlight neighbours
-    // ---------------------------------------
+    //     highlightMesh(
+    //         mesh,
+    //         0xffa500
+    //     );
 
-    neighborMeshes.forEach(mesh => {
+    // });
 
-        highlightMesh(
-            mesh,
-            0xffa500
-        );
-
-    });
-
-    // ---------------------------------------
-    // Focus camera
-    // ---------------------------------------
+    // Target remains normal
+// Only spatial neighbours get an outline
+    // // Fit camera to everything displayed
     // focusOnParts([
     //     ...matches,
     //     ...neighborMeshes
     // ]);
 
-    // ---------------------------------------
-    // Return information to agent
-    // ---------------------------------------
+ targetOutlinePass.selectedObjects = matches;
+
+relatedOutlinePass.selectedObjects = neighborMeshes;
+
+//   neighborMeshes.forEach(mesh => {
+//     setMeshOpacity(mesh, 0.45);
+// });
+
+matches.forEach(mesh => {
+    setMeshOpacity(mesh, 1.0);
+});
 
     const result = neighbors.map(item => ({
         partName:
@@ -751,7 +1039,8 @@ window.mcp_find_related_parts = function (args) {
     }));
 
     logToConsole(
-        `Showing target + ${result.length} spatial neighbours.`
+        `Showing ${result.length} spatial neighbours ` +
+        `within distance ${maxDistance}.`
     );
 
     return result;
@@ -776,6 +1065,262 @@ function getCandidateServerPorts() {
     return [...new Set(ports)];
 }
 
+function getStatusText(message) {
+
+    // Normal case
+    if (
+        typeof message.message === "string"
+    ) {
+        return message.message;
+    }
+
+    // Sometimes message itself may contain
+    // an object instead of a string
+    if (
+        typeof message.message === "object" &&
+        message.message !== null
+    ) {
+
+        // Prefer useful fields
+        if (
+            typeof message.message.text === "string"
+        ) {
+            return message.message.text;
+        }
+
+        if (
+            typeof message.message.message === "string"
+        ) {
+            return message.message.message;
+        }
+
+        // Last resort
+        return JSON.stringify(
+            message.message
+        );
+    }
+
+    // Tool fallback
+    if (
+        typeof message.tool === "string"
+    ) {
+        return `Using ${message.tool}...`;
+    }
+
+    return "Working...";
+}
+
+function addAgentStep(
+    icon,
+    message,
+    status
+) {
+
+    const container =
+        document.getElementById(
+            "agent-steps"
+        );
+
+    if (!container) {
+        return;
+    }
+
+    const step =
+        document.createElement("div");
+
+    step.className =
+        `agent-step ${status}`;
+
+    const iconEl =
+        document.createElement("span");
+
+    iconEl.className =
+        "agent-step-icon";
+
+    iconEl.textContent =
+        icon;
+
+    const messageEl =
+        document.createElement("span");
+
+    messageEl.className =
+        "agent-step-message";
+
+    messageEl.textContent =
+        message;
+
+    step.appendChild(iconEl);
+    step.appendChild(messageEl);
+
+    container.appendChild(step);
+
+    container.scrollTop =
+        container.scrollHeight;
+}
+
+let agentStatusClosed = false;
+function closeAgentStatus() {
+
+    const panel =
+        document.getElementById(
+            "agent-status"
+        );
+
+    if (!panel) {
+        return;
+    }
+
+    panel.classList.add("hidden");
+
+    agentStatusClosed = true;
+}
+
+function handleAgentStatus(message) {
+
+    const panel =
+        document.getElementById(
+            "agent-status"
+        );
+
+    const steps =
+        document.getElementById(
+            "agent-steps"
+        );
+
+    const state =
+        document.getElementById(
+            "agent-status-state"
+        );
+
+    if (!panel || !steps) {
+        return;
+    }
+
+    // A new agent operation starts.
+    // Re-open the status window.
+    if (
+        message.status === "thinking"
+    ) {
+        agentStatusClosed = false;
+
+        steps.innerHTML = "";
+
+        panel.classList.remove(
+            "hidden"
+        );
+    }
+
+    // If user explicitly closed the panel,
+    // don't reopen it for intermediate events.
+    if (
+        agentStatusClosed
+    ) {
+        return;
+    }
+
+    const text =
+        typeof message.message === "string"
+            ? message.message
+            : "Working...";
+
+    // =====================================
+    // THINKING
+    // =====================================
+
+    if (
+        message.status === "thinking"
+    ) {
+
+        addAgentStep(
+            "🤔",
+            text,
+            "active"
+        );
+
+        state.textContent =
+            "Thinking";
+
+        return;
+    }
+
+    // =====================================
+    // TOOL SELECTED
+    // =====================================
+
+    if (
+        message.status === "tool_selected"
+    ) {
+
+        addAgentStep(
+            "🔧",
+            text,
+            "active"
+        );
+
+        state.textContent =
+            "Selecting tool";
+
+        return;
+    }
+
+    // =====================================
+    // EXECUTING
+    // =====================================
+
+    if (
+        message.status === "executing"
+    ) {
+
+        addAgentStep(
+            "⚙",
+            text,
+            "active"
+        );
+
+        state.textContent =
+            "Working";
+
+        return;
+    }
+
+    // =====================================
+    // COMPLETED
+    // =====================================
+
+    if (
+        message.status === "completed"
+    ) {
+
+        addAgentStep(
+            "✓",
+            text,
+            "completed"
+        );
+
+        state.textContent =
+            "Completed";
+
+        return;
+    }
+
+    // =====================================
+    // ERROR
+    // =====================================
+
+    if (
+        message.status === "error"
+    ) {
+
+        addAgentStep(
+            "⚠",
+            text,
+            "error"
+        );
+
+        state.textContent =
+            "Error";
+    }
+}
 function connectWebSocket() {
     const ports = getCandidateServerPorts();
     const port = ports[currentSocketPortIndex % ports.length];
@@ -794,18 +1339,49 @@ function connectWebSocket() {
         }
         setTimeout(connectWebSocket, 1000);
     };
+browserSocket.onmessage = (event) => {
 
-    browserSocket.onmessage = (event) => {
-        try {
-            const message = JSON.parse(event.data);
-            // New servers send an ordered batch. Keep accepting the old single
-            // action shape so a browser refresh is not required during rollout.
-            const actions = message.actions || [{ name: message.action, args: message.payload }];
-            executeActions(actions);
-        } catch (err) {
-            console.error('Action error', err);
+    try {
+
+        const message =
+            JSON.parse(event.data);
+
+        // =====================================
+        // AGENT STATUS
+        // =====================================
+
+        if (
+            message.type ===
+            "agent_status"
+        ) {
+
+            handleAgentStatus(message);
+
+            return;
         }
-    };
+
+
+        // =====================================
+        // EXISTING MCP ACTION
+        // =====================================
+
+        const actions =
+            message.actions ||
+            [{
+                name: message.action,
+                args: message.payload
+            }];
+
+        executeActions(actions);
+
+    } catch (err) {
+
+        console.error(
+            "WebSocket message error",
+            err
+        );
+    }
+};
 
     browserSocket.onclose = () => setTimeout(connectWebSocket, 3000);
 }
@@ -847,15 +1423,31 @@ connectWebSocket();
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    renderer.render(scene, camera);
+    composer.render();
 }
 animate();
 
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window.addEventListener(
+    "resize",
+    () => {
+
+        camera.aspect =
+            window.innerWidth /
+            window.innerHeight;
+
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(
+            window.innerWidth,
+            window.innerHeight
+        );
+
+        composer.setSize(
+            window.innerWidth,
+            window.innerHeight
+        );
+    }
+);
 
 
 /**

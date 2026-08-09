@@ -18,7 +18,7 @@ function triggerReset() {
 async function sendMessage() {
   const inputEl = document.getElementById('user-input');
   const sendBtn = document.getElementById('send-btn');
-  const text = inputEl?.value?.trim();
+  const text = inputEl ?.value ?.trim();
 
   if (!text) return;
 
@@ -38,8 +38,13 @@ async function sendMessage() {
       try {
         const response = await fetch(`http://localhost:${serverPort}/api/chat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, history: chatHistory })
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: text,
+            history: chatHistory
+          })
         });
 
         const data = await response.json();
@@ -51,8 +56,14 @@ async function sendMessage() {
           if (Array.isArray(data.choices) && data.choices.length > 0) {
             appendChoiceButtons(thinkingEl, data.choices);
           }
-          chatHistory.push({ role: 'user', content: text });
-          chatHistory.push({ role: 'assistant', content: data.reply });
+          chatHistory.push({
+            role: 'user',
+            content: text
+          });
+          chatHistory.push({
+            role: 'assistant',
+            content: data.reply
+          });
         }
         return;
       } catch (err) {
@@ -69,8 +80,14 @@ async function sendMessage() {
       if (Array.isArray(data.choices) && data.choices.length > 0) {
         appendChoiceButtons(thinkingEl, data.choices);
       }
-      chatHistory.push({ role: 'user', content: text });
-      chatHistory.push({ role: 'assistant', content: data.reply });
+      chatHistory.push({
+        role: 'user',
+        content: text
+      });
+      chatHistory.push({
+        role: 'assistant',
+        content: data.reply
+      });
     }
   } catch (err) {
     thinkingEl.innerText = 'Error connecting to server. Ensure server.js is running.';
@@ -83,7 +100,10 @@ function appendChoiceButtons(messageEl, choices) {
   const choicesEl = document.createElement('div');
   choicesEl.className = 'choice-buttons';
 
-  choices.forEach(({ label, message }) => {
+  choices.forEach(({
+    label,
+    message
+  }) => {
     const button = document.createElement('button');
     button.className = 'choice-btn';
     button.type = 'button';
@@ -127,6 +147,109 @@ function clearChatWindow() {
   }));
 }
 
+function showAgentActivity() {
+
+  const panel =
+    document.getElementById(
+      "agent-activity"
+    );
+
+  const steps =
+    document.getElementById(
+      "agent-activity-steps"
+    );
+
+  const state =
+    document.getElementById(
+      "agent-activity-state"
+    );
+
+  if (!panel || !steps) {
+    return;
+  }
+
+  panel.classList.remove("hidden");
+
+  steps.innerHTML = "";
+
+  if (state) {
+    state.innerText = "Working...";
+  }
+}
+
+function addAgentActivity(
+  message,
+  status = "active",
+  tool = null
+) {
+
+  const container =
+    document.getElementById(
+      "agent-activity-steps"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const step =
+    document.createElement("div");
+
+  step.className =
+    `agent-step ${status}`;
+
+  let icon = "⏳";
+
+  if (status === "completed") {
+    icon = "✓";
+  }
+
+  if (status === "tool_selected") {
+    icon = "🔧";
+  }
+
+  if (status === "error") {
+    icon = "⚠";
+  }
+
+  const toolText =
+    tool ?
+    `<span class="agent-tool">${tool}</span>` :
+    "";
+
+  step.innerHTML = `
+    <span class="agent-step-icon">
+      ${icon}
+    </span>
+
+    <span class="agent-step-content">
+      <span class="agent-step-message">
+        ${message}
+      </span>
+
+      ${toolText}
+    </span>
+  `;
+
+  container.appendChild(step);
+
+  container.scrollTop =
+    container.scrollHeight;
+}
+
+function finishAgentActivity(
+  message = "Completed"
+) {
+
+  const state =
+    document.getElementById(
+      "agent-activity-state"
+    );
+
+  if (state) {
+    state.innerText = message;
+  }
+}
 window.sendQuickAction = sendQuickAction;
 window.triggerReset = triggerReset;
 window.sendMessage = sendMessage;

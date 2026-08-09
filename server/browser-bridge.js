@@ -33,10 +33,46 @@ export function isBrowserConnected() {
   return browserSocket?.readyState === 1;
 }
 
-export function sendActionsToBrowser(actions) {
-  debugLog("[MCP Server] Sending actions to browser", JSON.stringify(actions, null, 2));
-  browserSocket.send(JSON.stringify({ actions }));
+export function sendAgentStatus({
+    status,
+    message,
+    tool = null
+}) {
+    if (!browserSocket || browserSocket.readyState !== 1) {
+        console.warn(
+            "[Agent Status] Browser not connected"
+        );
+        return;
+    }
+
+    const payload = {
+        type: "agent_status",
+        status,
+        message: String(message || ""),
+        tool
+    };
+
+    console.log(
+        "[Agent Status]",
+        payload
+    );
+
+    browserSocket.send(
+        JSON.stringify(payload)
+    );
 }
+
+export function sendActionsToBrowser(actions) {
+  debugLog(
+    "[MCP Server] Sending actions to browser",
+    JSON.stringify(actions, null, 2)
+  );
+
+  browserSocket.send(
+    JSON.stringify({ actions })
+  );
+}
+
 
 export function getBrowserModelSummary() {
   return browserModelSummary;
