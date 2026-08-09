@@ -196,6 +196,20 @@ body {
   gap: 8px;
 }
 
+#clear-chat-btn {
+  margin-top: 8px;
+  background: #3a2a2a;
+  border: 1px solid #6a3d3d;
+  color: #f8d7d7;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+#clear-chat-btn:hover {
+  background: #4d3434;
+}
+
 #user-input {
   flex: 1;
   border: 1px solid #2d3748;

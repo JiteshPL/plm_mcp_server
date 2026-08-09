@@ -29,13 +29,38 @@ async function sendMessage() {
   const thinkingEl = appendMessage('assistant', 'Processing command...');
 
   try {
-    const response = await fetch('http://localhost:8080/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history: chatHistory })
-    });
+    const candidatePorts = [window.location.port, '8080', '8081', '8082', '8083', '8084']
+      .filter(Boolean)
+      .map(value => String(value));
 
-    const data = await response.json();
+    let lastError = null;
+    for (const serverPort of [...new Set(candidatePorts)]) {
+      try {
+        const response = await fetch(`http://localhost:${serverPort}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, history: chatHistory })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          thinkingEl.innerText = `Error: ${data.error}`;
+        } else {
+          thinkingEl.innerText = data.reply;
+          if (Array.isArray(data.choices) && data.choices.length > 0) {
+            appendChoiceButtons(thinkingEl, data.choices);
+          }
+          chatHistory.push({ role: 'user', content: text });
+          chatHistory.push({ role: 'assistant', content: data.reply });
+        }
+        return;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    thinkingEl.innerText = `Error connecting to server. Ensure the server is running. ${lastError ? lastError.message : ''}`.trim();
 
     if (data.error) {
       thinkingEl.innerText = `Error: ${data.error}`;
@@ -91,7 +116,19 @@ function appendMessage(role, text) {
   return msgDiv;
 }
 
+function clearChatWindow() {
+  const messagesContainer = document.getElementById('chat-messages');
+  if (!messagesContainer) return;
+
+  messagesContainer.innerHTML = '';
+  messagesContainer.appendChild(Object.assign(document.createElement('div'), {
+    className: 'message assistant',
+    innerText: 'Chat cleared. Start a new conversation.'
+  }));
+}
+
 window.sendQuickAction = sendQuickAction;
 window.triggerReset = triggerReset;
 window.sendMessage = sendMessage;
 window.appendMessage = appendMessage;
+window.clearChatWindow = clearChatWindow;
