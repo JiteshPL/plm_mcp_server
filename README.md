@@ -2,35 +2,33 @@
 
 A lightweight HTTP/WebSocket server and browser UI for interactive multi-command planning (MCP) with a Three.js preview.
 
-Overview
+This project implements a small MCP runtime that accepts natural-language commands, plans actions using a LangGraph-based command workflow (local parsing first, then optional LLM planning), and dispatches executable 3D actions to a browser preview powered by Three.js.
 
-This repository implements a small MCP runtime that accepts natural-language commands, plans actions using a LangGraph-based command workflow (optionally using an LLM), and sends executable 3D actions to a browser preview. The implementation focuses on deterministic local parsing first with a function-calling style LLM planning fallback.
+Highlights
 
-What this does
-
-- Accepts user commands (chat-style) over WebSocket or HTTP.
-- Attempts local intent parsing first for fast, deterministic actions.
-- Falls back to an LLM planning step (via the configured Hugging Face / OpenAI-compatible client) when explicit parsing doesn't match.
-- Dispatches actions to the browser UI which applies them to a Three.js scene.
-- Exposes a modelcontextprotocol-compatible server (stdio transport) so runtime tools can be discovered and invoked programmatically.
+- Accept chat-style commands over HTTP or WebSocket
+- Fast local intent parsing for common commands (camera controls, reset, presets)
+- Structured LLM-based planning (function-calling/tool-calls) as a fallback
+- Sends executable actions (tool invocations) to a browser preview
+- Exposes a Model Context Protocol (stdio) server for programmatic tool discovery and invocation
 
 Quick start
 
-1. Install dependencies:
+1. Install dependencies
 
 ```bash
 npm install
 ```
 
-2. Configure environment variables (common options):
+2. Configure environment variables (common options)
 
-- HUGGINGFACEHUB_API_TOKEN or HUGGINGFACE_API_KEY — API key used to call the LLM router.
-- HUGGINGFACE_REPO_ID — model id (defaults to `Qwen/Qwen2.5-7B-Instruct` when not set).
-- HUGGINGFACE_TEMPERATURE — numeric temperature override (default 0.2).
-- HUGGINGFACE_MAX_NEW_TOKENS — max new tokens for LLM completions (default 512).
-- PORT — server HTTP/WebSocket port (default 8080).
+- HUGGINGFACEHUB_API_TOKEN or HUGGINGFACE_API_KEY — API key used by the OpenAI-compatible client/router
+- HUGGINGFACE_REPO_ID or MODEL_NAME — model id to use (defaults to `Qwen/Qwen2.5-7B-Instruct` if not set)
+- HUGGINGFACE_TEMPERATURE or TEMPERATURE — numeric temperature override (default: 0.2)
+- HUGGINGFACE_MAX_NEW_TOKENS or MAX_NEW_TOKENS — max new tokens for LLM completions (default: 512)
+- PORT — server HTTP/WebSocket port (default: 8080)
 
-3. Start the server:
+3. Start the server
 
 ```bash
 npm start
@@ -38,90 +36,38 @@ npm start
 node server.js
 ```
 
-4. Open the UI in your browser:
+4. Open the UI
 
-- Open `ui/index.html` directly in a browser. If your browser blocks local-file WebSocket connections, serve the `ui/` folder (for example `npx http-server ui`) and open the served page.
+- Open `ui/index.html` directly in a browser, or serve the `ui/` folder (for example: `npx http-server ui`) if your browser blocks local-file WebSocket connections.
 
 Server behavior and API
 
 - HTTP API endpoint: POST /api/chat
-  - Payload: { "message": "...", "history": [ ... ] }
-  - Response: If the graph produced a clarification prompt, the server returns that clarification along with executedTools: [] (so the UI can ask follow-up questions). Otherwise the server returns { reply, executedTools } where executedTools is an array of actions sent to the browser.
+  - Payload: { "message": "...", "history": [...] }
+  - Response: JSON object containing either a `clarification` (if the graph asks a follow-up question) or `reply` and `executedTools`.
 
-- WebSocket: The server accepts a browser WebSocket connection and forwards executed tool actions to the connected browser preview. When dispatching actions, a warning is logged and included in the reply if the 3D browser view is not connected.
+- WebSocket: Server accepts a browser WebSocket connection and forwards executed tool actions to the connected browser preview. When dispatching actions while the preview is not connected, a warning is included in the reply so the UI can surface connectivity issues.
 
-- modelcontextprotocol server: The runtime also launches a Model Context Protocol server (stdio transport). It implements ListTools and CallTool handlers so external controllers can list the available tools and invoke them programmatically.
+- Model Context Protocol (stdio): A lightweight MCP-compatible server is launched alongside the HTTP server. It implements ListTools and CallTool handlers so external controllers can discover and invoke runtime tools programmatically.
 
-Runtime configuration (defaults & env names)
-
-- PORT — defaults to 8080
-- DEBUG — currently enabled by default in config.js (set to `false` in code to disable console debug logs)
-- MODEL_NAME — read from HUGGINGFACE_REPO_ID or defaults to `Qwen/Qwen2.5-7B-Instruct`
-- TEMPERATURE — read from HUGGINGFACE_TEMPERATURE (default 0.2)
-- MAX_NEW_TOKENS — read from HUGGINGFACE_MAX_NEW_TOKENS (default 512)
-
-Command flow / LangGraph behavior
-
-The command workflow implemented in `server/command-graph.js` follows this prioritized flow:
-
-1. detect_reset — quick check for reset-like inputs (e.g., "reset scene", "reset camera"). If matched, returns a `reset_scene` action immediately.
-2. clarify — if the message appears ambiguous, the graph sets a clarification payload so the UI can ask a follow-up question instead of executing actions.
-3. plan_explicit / local parsing — parse and execute simple, deterministic intents locally (no LLM). This is the fast path for camera controls, resets, and small utilities.
-4. plan_llm — if local parsing doesn't yield actions, call the configured LLM. The code builds a function-calling style tool list from `server/tools.js` (type: "function", function: { name, description, parameters }) and calls the model. The server expects `message.tool_calls` (function-calling output) or conventional assistant content. The produced tool calls are converted into executedTools.
-5. fallback — if the LLM call errors or returns no tools, local parsing is attempted again as a fallback.
-6. dispatch — if executedTools are present, they're sent to the browser UI over WebSocket. A reply string may be returned alongside the dispatched actions.
-
-Important implementation notes
-
-- LLM client: The OpenAI-compatible client is constructed with a Hugging Face router baseURL and picks the API key from either HUGGINGFACEHUB_API_TOKEN or HUGGINGFACE_API_KEY. That means you can route calls through Hugging Face's router or supply an OpenAI-compatible API key depending on environment.
-
-- Function-calling / tool definitions: `server/tools.js` contains TOOL_DEFINITIONS; these are translated to function-style descriptors for the LLM so the model can return structured `tool_calls`. The code then maps those calls into the in-memory executedTools array and applies `applyActionSuggestions` to normalize/validate them.
-
-- Tool renames / changes: Notable tool name changes in this version include `set_camera_view` (replaces earlier `set_camera` naming). Inspect `server/tools.js` for the latest tool names and input schemas.
-
-- Dispatch warnings: If the browser WebSocket is not connected, dispatching will log and include a warning in the reply so UIs can surface the connectivity issue to users.
-
-File layout (summary)
-
-- server/
-  - index.js — Server entry point (HTTP + WebSocket listeners, ModelContext Protocol server bindings)
-  - command-graph.js — LangGraph-based command/workflow construction (detect_reset -> clarify -> plan_llm -> fallback -> dispatch)
-  - intent.js — Local intent parsing and clarification helpers
-  - tools.js — Definitions of browser-facing tools (names, input schemas)
-  - browser-bridge.js — WebSocket bridge utilities to send actions to the browser
-  - config.js — Runtime configuration (model name, temperature, token limits)
-- ui/
-  - index.html — UI entry page (Three.js canvas + chat controls)
-  - app.js — Three.js scene setup and tool handlers
-  - chat-ui.js — Chat UI and clarification controls
-  - styles.css — UI styling
-- server.js — Backward-compatible launcher
-- docs/architecture.svg — Architecture diagram referenced above
-
-Usage examples
-
-Create the LangGraph command graph (server-side):
+Example: building and running the LangGraph-based command graph
 
 ```js
 // server/index.js (excerpt)
 import { createCommandGraph } from "./server/command-graph.js";
-import OpenAI from "openai";
+import OpenAI from "openai"; // OpenAI-compatible client (router)
 
-const openai = new OpenAI({ apiKey: process.env.HUGGINGFACEHUB_API_TOKEN || process.env.HUGGINGFACE_API_KEY, baseURL: "https://router.huggingface.co/v1" });
+const openai = new OpenAI({
+  apiKey: process.env.HUGGINGFACEHUB_API_TOKEN || process.env.HUGGINGFACE_API_KEY,
+  baseURL: "https://router.huggingface.co/v1",
+});
+
 const graph = createCommandGraph(openai);
 
 // When you receive a user message, construct a minimal state object and run the graph.
 const initialState = { message: "rotate the cube 45 degrees clockwise" };
 // The StateGraph instance returned by createCommandGraph will be used to execute the nodes
-// and produce a side effect (sending actions to the browser) and/or a reply string.
-```
-
-HTTP POST example (UI -> server)
-
-```json
-{
-  "message": "Move the camera back and reset the scene"
-}
+// and produce side effects (sending actions to the browser) and/or a reply string.
 ```
 
 Browser action format (server -> UI) — example action array sent over WebSocket:
@@ -133,15 +79,67 @@ Browser action format (server -> UI) — example action array sent over WebSocke
 ]
 ```
 
-Notes about the command-graph implementation
+LangGraph node diagram
 
-- The Node definitions in `server/command-graph.js` implement a short-circuit pipeline: local rules first, then LLM planning. This reduces reliance on the LLM for trivial or deterministic commands.
-- TOOL_DEFINITIONS in `server/tools.js` are transformed into function-like descriptors when the LLM is called, enabling function-calling style outputs that map to the browser toolset.
-- The graph logs when dispatching actions and warns when the browser preview is not connected.
+The command workflow implemented in server/command-graph.js follows a prioritized, short-circuit pipeline. The diagram below summarizes the main nodes and the decision flow (Mermaid):
+
+```mermaid
+flowchart TD
+  A[Receive user message] --> B[detect_reset]
+  B -- reset detected --> G[dispatch reset_scene]
+  B -- no reset --> C[clarify?]
+  C -- ambiguous --> H[return clarification]
+  C -- clear --> D[plan_explicit / local parsing]
+  D -- match (local) --> G
+  D -- no match --> E[plan_llm]
+  E --> F[LLM -> tool_calls]
+  F --> G[dispatch executedTools]
+  E -- error / no tools --> D[re-run local parsing as fallback]
+  G --> I[send to browser preview (WebSocket)]
+```
+
+If you prefer a static SVG export of this node diagram, I can add docs/langgraph-nodes.svg to the repo.
+
+Implementation notes
+
+- Local parsing (server/intent.js) is the fast, deterministic path used for camera manipulations, resets, and other simple commands.
+- LLM planning: TOOL_DEFINITIONS in `server/tools.js` are translated to function-style descriptors for the LLM so the model can return structured tool_calls. Those tool_calls are validated and mapped to browser actions before dispatch.
+- Dispatching: Executed tools are sent to the browser preview via WebSocket. If the preview is not connected, the server returns the actions in the response and includes a dispatch warning.
+
+Runtime configuration (defaults & env names)
+
+- PORT — defaults to 8080
+- DEBUG — set in config.js (set to `false` to suppress debug logs)
+- MODEL_NAME / HUGGINGFACE_REPO_ID — defaults to `Qwen/Qwen2.5-7B-Instruct` in config
+- TEMPERATURE / HUGGINGFACE_TEMPERATURE — default 0.2
+- MAX_NEW_TOKENS / HUGGINGFACE_MAX_NEW_TOKENS — default 512
+
+File layout
+
+- server/
+  - index.js — Server entry point (HTTP + WebSocket + Model Context Protocol bindings)
+  - command-graph.js — LangGraph-based command/workflow construction (detect_reset -> clarify -> plan_llm -> fallback -> dispatch)
+  - intent.js — Local intent parsing and clarification helpers
+  - tools.js — Definitions of browser-facing tools (names, JSON input schemas)
+  - browser-bridge.js — WebSocket bridge utilities to send actions to the browser
+  - config.js — Runtime configuration (model name, temperature, token limits)
+- ui/
+  - index.html — UI entry page (Three.js canvas + chat controls)
+  - app.js — Three.js scene setup and tool handlers
+  - chat-ui.js — Chat UI and clarification controls
+  - styles.css — UI styling
+- server.js — Backward-compatible launcher
+- docs/architecture.svg — Architecture diagram
 
 Contributing
 
-If you'd like improvements to this README (more code examples, a PNG export of the LangGraph diagram, or a runtime sequence diagram), open an issue or a PR. I can also generate a changelog or add step-by-step deploy instructions on request.
+PRs and issues welcome. If you'd like me to:
+
+- export the LangGraph node diagram as an SVG and add it to docs/
+- add more code examples or a runtime sequence diagram
+- improve the UI instructions or add Docker/startup scripts
+
+... tell me which one and I'll add it.
 
 License
 
