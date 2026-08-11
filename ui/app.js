@@ -2,20 +2,30 @@ console.log("PLM app.js STARTED");
 
 import * as THREE from "three";
 
-import { OrbitControls }
-    from "three/addons/controls/OrbitControls.js";
+import {
+    OrbitControls
+}
+from "three/addons/controls/OrbitControls.js";
 
-import { EffectComposer }
-    from "three/addons/postprocessing/EffectComposer.js";
+import {
+    EffectComposer
+}
+from "three/addons/postprocessing/EffectComposer.js";
 
-import { RenderPass }
-    from "three/addons/postprocessing/RenderPass.js";
+import {
+    RenderPass
+}
+from "three/addons/postprocessing/RenderPass.js";
 
-import { OutlinePass }
-    from "three/addons/postprocessing/OutlinePass.js";
+import {
+    OutlinePass
+}
+from "three/addons/postprocessing/OutlinePass.js";
 
-import { GLTFLoader }
-    from "three/addons/loaders/GLTFLoader.js";
+import {
+    GLTFLoader
+}
+from "three/addons/loaders/GLTFLoader.js";
 
 console.log("THREE loaded:", THREE.REVISION);
 console.log("OrbitControls loaded:", typeof OrbitControls);
@@ -298,11 +308,11 @@ function focusOnParts(mesh) {
 
     const direction =
         new THREE.Vector3(1, 0.8, 1)
-            .normalize();
+        .normalize();
 
     camera.position.copy(
         center.clone()
-            .add(direction.multiplyScalar(distance))
+        .add(direction.multiplyScalar(distance))
     );
 
     controls.target.copy(center);
@@ -453,15 +463,15 @@ function buildModelSummary(model) {
     const supplierBreakdown = {};
 
     partsRegistry.forEach(mesh => {
-        const supplier = mesh.userData?.supplier || 'Unknown';
+        const supplier = mesh.userData ?.supplier || 'Unknown';
         supplierBreakdown[supplier] = (supplierBreakdown[supplier] || 0) + 1;
     });
 
     const representativeParts = partsRegistry.slice(0, 12).map(mesh => {
         const bounds = new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3());
         return {
-            name: mesh.userData?.partId || mesh.name || 'Unnamed part',
-            supplier: mesh.userData?.supplier || 'Unknown',
+            name: mesh.userData ?.partId || mesh.name || 'Unnamed part',
+            supplier: mesh.userData ?.supplier || 'Unknown',
             size: {
                 x: Number(bounds.x.toFixed(2)),
                 y: Number(bounds.y.toFixed(2)),
@@ -504,10 +514,14 @@ function sendModelSummaryToServer() {
 
 window.mcp_highlight_components = function (args) {
     clearOutline();
-    const targetSupplier = args.filterCriteria?.supplier?.toLowerCase();
+    const targetSupplier = args.filterCriteria ?.supplier ?.toLowerCase();
     const namedColors = {
-        blue: '#0084ff', red: '#ff0000', green: '#00c853',
-        yellow: '#ffd600', orange: '#ff6d00', purple: '#9c27b0'
+        blue: '#0084ff',
+        red: '#ff0000',
+        green: '#00c853',
+        yellow: '#ffd600',
+        orange: '#ff6d00',
+        purple: '#9c27b0'
     };
     const requestedColor = String(args.colorHex || '').trim().toLowerCase();
     const colorHex = namedColors[requestedColor] || requestedColor;
@@ -518,7 +532,7 @@ window.mcp_highlight_components = function (args) {
     let matchedCount = 0;
 
     partsRegistry.forEach(mesh => {
-        const meshSupplier = mesh.userData.supplier?.toLowerCase();
+        const meshSupplier = mesh.userData ?.supplier ?.toLowerCase();
         const isMatch = targetSupplier && meshSupplier === targetSupplier;
 
         if (isMatch) {
@@ -648,8 +662,8 @@ function findPartMatches(partName) {
 
     const query =
         String(partName || "")
-            .trim()
-            .toLowerCase();
+        .trim()
+        .toLowerCase();
 
     return partsRegistry.filter(mesh => {
 
@@ -700,7 +714,7 @@ window.mcp_isolate_part = function (args) {
             const color =
                 parseInt(
                     (args.colorHex || "#ffd600")
-                        .replace("#", ""),
+                    .replace("#", ""),
                     16
                 );
 
@@ -804,14 +818,14 @@ function addPartIfValid(object, result) {
         return;
     }
 
-    if (!object.userData?.partId) {
+    if (!object.userData ?.partId) {
         return;
     }
 
     result.add(object);
 }
 
-   function highlightMesh(mesh, colorHex = 0xffa500) {
+function highlightMesh(mesh, colorHex = 0xffa500) {
 
     if (!mesh || !mesh.material) {
         return;
@@ -883,8 +897,8 @@ function outlineMeshes(meshes) {
 
     outlinePass.selectedObjects = meshes.filter(
         mesh =>
-            mesh &&
-            typeof mesh.updateWorldMatrix === "function"
+        mesh &&
+        typeof mesh.updateWorldMatrix === "function"
     );
 }
 
@@ -901,9 +915,8 @@ function setMeshOpacity(object, opacity) {
             return;
         }
 
-        const materials = Array.isArray(child.material)
-            ? child.material
-            : [child.material];
+        const materials = Array.isArray(child.material) ?
+            child.material : [child.material];
 
         materials.forEach(material => {
 
@@ -926,16 +939,16 @@ function resetAllPartOpacity() {
 }
 
 window.mcp_find_related_parts = function (args) {
-resetAllPartOpacity();
+    resetAllPartOpacity();
     const partName =
         String(args.partName || "")
-            .trim()
-            .toLowerCase();
+        .trim()
+        .toLowerCase();
 
     const maxDistance =
-        args.maxDistance !== undefined
-            ? Number(args.maxDistance)
-            : 1;
+        args.maxDistance !== undefined ?
+        Number(args.maxDistance) :
+        1;
 
     if (!partName) {
         logToConsole("No part name provided.");
@@ -1004,33 +1017,31 @@ resetAllPartOpacity();
     // });
 
     // Target remains normal
-// Only spatial neighbours get an outline
+    // Only spatial neighbours get an outline
     // // Fit camera to everything displayed
     // focusOnParts([
     //     ...matches,
     //     ...neighborMeshes
     // ]);
 
- targetOutlinePass.selectedObjects = matches;
+    targetOutlinePass.selectedObjects = matches;
 
-relatedOutlinePass.selectedObjects = neighborMeshes;
+    relatedOutlinePass.selectedObjects = neighborMeshes;
 
-//   neighborMeshes.forEach(mesh => {
-//     setMeshOpacity(mesh, 0.45);
-// });
+    //   neighborMeshes.forEach(mesh => {
+    //     setMeshOpacity(mesh, 0.45);
+    // });
 
-matches.forEach(mesh => {
-    setMeshOpacity(mesh, 1.0);
-});
+    matches.forEach(mesh => {
+        setMeshOpacity(mesh, 1.0);
+    });
 
     const result = neighbors.map(item => ({
-        partName:
-            item.mesh.userData?.partName ||
-            item.mesh.userData?.partId ||
+        partName: item.mesh.userData ?.partName ||
+            item.mesh.userData ?.partId ||
             item.mesh.name,
 
-        partId:
-            item.mesh.userData?.partId ||
+        partId: item.mesh.userData ?.partId ||
             item.mesh.name,
 
         distance: Number(
@@ -1159,6 +1170,7 @@ function addAgentStep(
 }
 
 let agentStatusClosed = false;
+
 function closeAgentStatus() {
 
     const panel =
@@ -1219,9 +1231,9 @@ function handleAgentStatus(message) {
     }
 
     const text =
-        typeof message.message === "string"
-            ? message.message
-            : "Working...";
+        typeof message.message === "string" ?
+        message.message :
+        "Working...";
 
     // =====================================
     // THINKING
@@ -1321,14 +1333,28 @@ function handleAgentStatus(message) {
             "Error";
     }
 }
+
 function connectWebSocket() {
     const ports = getCandidateServerPorts();
     const port = ports[currentSocketPortIndex % ports.length];
     browserSocket = new WebSocket(`ws://localhost:${port}`);
 
+    // browserSocket.onopen = () => {
+    //     currentSocketPortIndex = 0;
+    //     logToConsole(`Connected to MCP Server on ws://localhost:${port}`);
+    //     sendModelSummaryToServer();
+    // };
+
     browserSocket.onopen = () => {
-        currentSocketPortIndex = 0;
-        logToConsole(`Connected to MCP Server on ws://localhost:${port}`);
+        console.log(
+            "[Browser] Connected to PLM server"
+        );
+        browserSocket.send(
+            JSON.stringify({
+                type: "client-role",
+                role: "browser"
+            })
+        );
         sendModelSummaryToServer();
     };
 
@@ -1339,49 +1365,120 @@ function connectWebSocket() {
         }
         setTimeout(connectWebSocket, 1000);
     };
-browserSocket.onmessage = (event) => {
-
-    try {
+    browserSocket.onmessage = async event => {
 
         const message =
             JSON.parse(event.data);
 
-        // =====================================
-        // AGENT STATUS
-        // =====================================
 
-        if (
-            message.type ===
-            "agent_status"
-        ) {
+        if (message.type === "agent_status") {
 
-            handleAgentStatus(message);
+            updateAgentStatus(
+                message
+            );
 
             return;
         }
+        /*
+         * MCP → Browser
+         */
+        if (
+            message.type ===
+            "execute-action"
+        ) {
+
+            const {
+                requestId,
+                action
+            } = message;
 
 
-        // =====================================
-        // EXISTING MCP ACTION
-        // =====================================
+            try {
 
-        const actions =
-            message.actions ||
-            [{
-                name: message.action,
-                args: message.payload
-            }];
+                const functionName =
+                    `mcp_${action.name}`;
 
-        executeActions(actions);
 
-    } catch (err) {
+                const handler =
+                    window[
+                        functionName
+                    ];
 
-        console.error(
-            "WebSocket message error",
-            err
-        );
-    }
-};
+
+                if (
+                    typeof handler !==
+                    "function"
+                ) {
+
+                    throw new Error(
+                        `Tool handler not found: ${functionName}`
+                    );
+
+                }
+
+
+                const result =
+                    await handler(
+                        action.args || {}
+                    );
+
+
+                browserSocket.send(
+                    JSON.stringify({
+
+                        type: "action-result",
+
+                        requestId,
+
+                        result
+
+                    })
+                );
+
+
+            } catch (error) {
+
+                browserSocket.send(
+                    JSON.stringify({
+
+                        type: "action-result",
+
+                        requestId,
+
+                        result: {
+                            error: error.message
+                        }
+
+                    })
+                );
+
+            }
+
+        }
+
+
+        /*
+         * Existing direct action format
+         */
+        if (
+            Array.isArray(
+                message.actions
+            )
+        ) {
+
+            for (
+                const action of message.actions
+            ) {
+
+                await executeAction(
+                    action
+                );
+
+            }
+
+        }
+
+    };
 
     browserSocket.onclose = () => setTimeout(connectWebSocket, 3000);
 }
@@ -1393,14 +1490,17 @@ const actionHandlers = {
     generate_exploded_view: window.mcp_generate_exploded_view,
     create_cross_section: window.mcp_create_cross_section,
     isolate_part: window.mcp_isolate_part,
-    find_related_parts:window.mcp_find_related_parts,
+    find_related_parts: window.mcp_find_related_parts,
 };
 
 let actionQueue = Promise.resolve();
 
 function executeActions(actions) {
     actionQueue = actionQueue.then(() => {
-        for (const { name, args } of actions) {
+        for (const {
+                name,
+                args
+            } of actions) {
             const handler = actionHandlers[name];
             if (!handler) {
                 console.warn(`Unknown MCP action: ${name}`);
@@ -1449,6 +1549,92 @@ window.addEventListener(
     }
 );
 
+function updateAgentStatus(data) {
+
+    const panel =
+        document.getElementById(
+            "agent-status"
+        );
+
+    const state =
+        document.getElementById(
+            "agent-status-state"
+        );
+
+    const steps =
+        document.getElementById(
+            "agent-steps"
+        );
+
+    if (!panel || !state || !steps) {
+
+        console.warn(
+            "[Agent Status] UI elements not found"
+        );
+
+        return;
+    }
+
+
+    // Show panel
+    panel.classList.remove(
+        "hidden"
+    );
+
+
+    // Current state
+    state.textContent =
+        data.status || "Working";
+
+
+    // Add step
+    if (data.message) {
+
+        const step =
+            document.createElement("div");
+
+        step.className =
+            "agent-step";
+
+
+        const icon =
+            data.status === "completed"
+                ? "✓"
+                : data.status === "error"
+                    ? "⚠"
+                    : "●";
+
+
+        step.innerHTML = `
+            <span class="agent-step-icon">
+                ${icon}
+            </span>
+
+            <span class="agent-step-text">
+                ${escapeHtml(data.message)}
+            </span>
+        `;
+
+
+        steps.appendChild(step);
+
+
+        // Keep latest step visible
+        steps.scrollTop =
+            steps.scrollHeight;
+    }
+}
+
+function escapeHtml(value) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent =
+        String(value);
+
+    return div.innerHTML;
+}
 
 /**
  * Renders a structured Action Card inside the chat container
@@ -1457,13 +1643,13 @@ window.addEventListener(
  * @param {Function} undoCallback - Function to revert the specific action
  */
 function appendActionCard(actionType, description, undoCallback = null) {
-  const chatContainer = document.getElementById('chat-messages');
-  if (!chatContainer) return;
+    const chatContainer = document.getElementById('chat-messages');
+    if (!chatContainer) return;
 
-  const card = document.createElement('div');
-  card.className = 'message assistant action-card';
+    const card = document.createElement('div');
+    card.className = 'message assistant action-card';
 
-  card.innerHTML = `
+    card.innerHTML = `
     <div class="action-info">
       <span class="action-badge">✓ ${actionType.replace('_', ' ')}</span>
       <span>${description}</span>
@@ -1471,42 +1657,44 @@ function appendActionCard(actionType, description, undoCallback = null) {
     ${undoCallback ? '<button class="undo-btn">Undo</button>' : ''}
   `;
 
-  if (undoCallback) {
-    const undoBtn = card.querySelector('.undo-btn');
-    undoBtn?.addEventListener('click', () => {
-      undoCallback();
-      card.style.opacity = '0.5';
-      undoBtn.disabled = true;
-      undoBtn.innerText = 'Reverted';
-    });
-  }
+    if (undoCallback) {
+        const undoBtn = card.querySelector('.undo-btn');
+        undoBtn ?.addEventListener('click', () => {
+            undoCallback();
+            card.style.opacity = '0.5';
+            undoBtn.disabled = true;
+            undoBtn.innerText = 'Reverted';
+        });
+    }
 
-  chatContainer.appendChild(card);
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+    chatContainer.appendChild(card);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
 function runVendorHighlight(vendor, colorHex) {
-  window.mcp_highlight_components({
-    filterCriteria: { supplier: vendor },
-    colorHex,
-    isolateMode: true
-  });
+    window.mcp_highlight_components({
+        filterCriteria: {
+            supplier: vendor
+        },
+        colorHex,
+        isolateMode: true
+    });
 }
 
-document.getElementById('btnVendorA')?.addEventListener('click', () => {
-  runVendorHighlight('Vendor-A', '#0000ff');
-  appendActionCard(
-    'highlight_components',
-    'Highlighted Vendor-A parts in blue',
-    () => resetScene()
-  );
+document.getElementById('btnVendorA') ?.addEventListener('click', () => {
+    runVendorHighlight('Vendor-A', '#0000ff');
+    appendActionCard(
+        'highlight_components',
+        'Highlighted Vendor-A parts in blue',
+        () => resetScene()
+    );
 });
 
-document.getElementById('btnVendorB')?.addEventListener('click', () => {
-  runVendorHighlight('Vendor-B', '#ff0000');
-  appendActionCard(
-    'highlight_components',
-    'Highlighted Vendor-B parts in red',
-    () => resetScene()
-  );
+document.getElementById('btnVendorB') ?.addEventListener('click', () => {
+    runVendorHighlight('Vendor-B', '#ff0000');
+    appendActionCard(
+        'highlight_components',
+        'Highlighted Vendor-B parts in red',
+        () => resetScene()
+    );
 });
