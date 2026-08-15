@@ -264,26 +264,31 @@ MAX_NEW_TOKENS = process.env.MAX_NEW_TOKENS || process.env.HUGGINGFACE_MAX_NEW_T
 
 ```
 plm_mcp_server/
-├── server/
+├── .gitignore                ← Git ignore rules
+├── .vscode/                  ← VSCode workspace settings (optional)
+├── docs/                     ← Documentation and diagrams
+│   └── architecture.svg
+├── server/                   ← Server code (HTTP, WebSocket, MCP)
 │   ├── index.js              ← Server entry point (HTTP + WebSocket + MCP)
 │   ├── command-graph.js      ← LangGraph workflow definition
 │   ├── intent.js             ← Local intent parsing & clarification
 │   ├── tools.js              ← Tool definitions for MCP & LLM
 │   ├── browser-bridge.js     ← WebSocket bridge to browser
+│   ├── mcp-browser-bridge.js ← MCP ↔ browser bridge (helper)
 │   ├── mcp-client.js         ← MCP client (stdio) for tool discovery/execution
-│   └── config.js             ← Runtime configuration
-│
-├── ui/
+│   ├── mcp-server.js         ← MCP server implementation (stdio)
+│   ├── config.js             ← Runtime configuration
+│   └── graph/                ← LangGraph graph helpers and nodes
+├── ui/                       ← Browser UI and Three.js preview
 │   ├── index.html            ← Browser entry page
 │   ├── app.js                ← Three.js scene setup & tool execution
 │   ├── chat-ui.js            ← Chat UI & clarification handlers
+│   ├── scene-controller.js   ← Scene controls & interactions
 │   └── styles.css            ← UI styling
-│
-├── .env.example              ← Example environment variables
 ├── package.json              ← Dependencies & scripts
+├── package-lock.json         ← Exact dependency tree (lockfile)
 ├── server.js                 ← Backward-compatible launcher
-├── README.md                 ← This file
-└── LICENSE                   ← License (MIT)
+└── README.md                 ← This file
 ```
 
 ## Key Dependencies
