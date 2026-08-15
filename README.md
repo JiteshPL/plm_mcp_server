@@ -2,76 +2,107 @@
 
 A lightweight HTTP/WebSocket server and browser UI for interactive multi-command planning (MCP) with a Three.js preview.
 
-This project implements a small MCP runtime that accepts natural-language commands, plans actions using a LangGraph-based command workflow (local parsing first, then optional LLM planning), and dispatches executable 3D actions to a browser preview powered by Three.js.
+This project implements a small MCP runtime that accepts natural-language commands, plans actions using a LangGraph-based command workflow (local parsing first, then optional LLM planning), and dispatches executable actions to a browser-based 3D CAD visualization powered by Three.js.
 
-Highlights
+## Highlights
 
 - Accept chat-style commands over HTTP or WebSocket
 - Fast local intent parsing for common commands (camera controls, reset, presets)
 - Structured LLM-based planning (function-calling/tool-calls) as a fallback
 - Sends executable actions (tool invocations) to a browser preview
 - Exposes a Model Context Protocol (stdio) server for programmatic tool discovery and invocation
+- Dynamic MCP tool discovery and execution
+- Real-time agent status updates to the browser UI
+- Fallback planning when LLM tool selection fails
 
-Quick start
+## Quick Start
 
-1. Install dependencies
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-2. Configure environment variables (common options)
+### 2. Configure environment variables
 
-- HUGGINGFACEHUB_API_TOKEN or HUGGINGFACE_API_KEY — API key used by the OpenAI-compatible client/router
-- HUGGINGFACE_REPO_ID or MODEL_NAME — model id to use (defaults to `Qwen/Qwen2.5-7B-Instruct` if not set)
-- HUGGINGFACE_TEMPERATURE or TEMPERATURE — numeric temperature override (default: 0.2)
-- HUGGINGFACE_MAX_NEW_TOKENS or MAX_NEW_TOKENS — max new tokens for LLM completions (default: 512)
-- PORT — server HTTP/WebSocket port (default: 8080)
+Set any of these environment variables to customize behavior:
 
-3. Start the server
+- `HUGGINGFACEHUB_API_TOKEN` or `HUGGINGFACE_API_KEY` — API key for the OpenAI-compatible LLM client
+- `HUGGINGFACE_REPO_ID` or `MODEL_NAME` — Model ID to use (defaults to `Qwen/Qwen2.5-7B-Instruct`)
+- `HUGGINGFACE_TEMPERATURE` or `TEMPERATURE` — LLM temperature override (default: 0.2)
+- `HUGGINGFACE_MAX_NEW_TOKENS` or `MAX_NEW_TOKENS` — Max tokens for LLM completions (default: 512)
+- `PORT` — HTTP/WebSocket server port (default: 8080)
+- `DEBUG` — Enable debug logging (default: true)
+
+Example `.env` file:
+
+```
+HUGGINGFACEHUB_API_TOKEN=your_token_here
+MODEL_NAME=Qwen/Qwen2.5-7B-Instruct
+TEMPERATURE=0.2
+MAX_NEW_TOKENS=512
+PORT=8080
+DEBUG=true
+```
+
+### 3. Start the server
 
 ```bash
 npm start
 # or
-node server.js
+node server/index.js
 ```
 
-4. Open the UI
+The server will start on the configured port (default `http://localhost:8080`).
 
-- Open `ui/index.html` directly in a browser, or serve the `ui/` folder (for example: `npx http-server ui`) if your browser blocks local-file WebSocket connections.
+### 4. Open the browser UI
 
-Server behavior and API
+- Open `ui/index.html` directly in a browser, or serve the `ui/` folder with:
+  ```bash
+  npx http-server ui
+  ```
+  
+  Use `http-server` if your browser blocks local-file WebSocket connections.
 
-- HTTP API endpoint: POST /api/chat
-  - Payload: { "message": "...", "history": [...] }
-  - Response: JSON object containing either a `clarification` (if the graph asks a follow-up question) or `reply` and `executedTools`.
+## Server Behavior and API
 
-- WebSocket: Server accepts a browser WebSocket connection and forwards executed tool actions to the connected browser preview. When dispatching actions while the preview is not connected, a warning is included in the reply so the UI can surface connectivity issues.
+### HTTP API Endpoint: POST `/api/chat`
 
-- Model Context Protocol (stdio): A lightweight MCP-compatible server is launched alongside the HTTP server. It implements ListTools and CallTool handlers so external controllers can discover and invoke runtime tools programmatically.
-
-Example: building and running the LangGraph-based command graph
-
-```js
-// server/index.js (excerpt)
-import { createCommandGraph } from "./server/command-graph.js";
-import OpenAI from "openai"; // OpenAI-compatible client (router)
-
-const openai = new OpenAI({
-  apiKey: process.env.HUGGINGFACEHUB_API_TOKEN || process.env.HUGGINGFACE_API_KEY,
-  baseURL: "https://router.huggingface.co/v1",
-});
-
-const graph = createCommandGraph(openai);
-
-// When you receive a user message, construct a minimal state object and run the graph.
-const initialState = { message: "rotate the cube 45 degrees clockwise" };
-// The StateGraph instance returned by createCommandGraph will be used to execute the nodes
-// and produce side effects (sending actions to the browser) and/or a reply string.
+**Request payload:**
+```json
+{
+  "message": "rotate the cube 45 degrees clockwise",
+  "history": []
+}
 ```
 
-Browser action format (server -> UI) — example action array sent over WebSocket:
+**Response:**
+```json
+{
+  "reply": "Rotating the cube 45 degrees clockwise.",
+  "executedTools": [
+    { "name": "rotate", "args": { "angle": 45 } }
+  ]
+}
+```
 
+Or, if clarification is needed:
+```json
+{
+  "question": "Which plane should I rotate around?",
+  "options": ["X", "Y", "Z"],
+  "executedTools": []
+}
+```
+
+### WebSocket: Real-time Browser Communication
+
+- Server listens for a browser WebSocket connection
+- Forwards executed tool actions to the connected preview in real-time
+- Sends agent status updates during planning and execution
+- If the preview is not connected when actions are dispatched, a warning is logged
+
+**Browser action format (server → UI):**
 ```json
 [
   { "name": "reset_scene", "args": {} },
@@ -79,68 +110,305 @@ Browser action format (server -> UI) — example action array sent over WebSocke
 ]
 ```
 
-LangGraph node diagram
+**Agent status updates (server → UI):**
+```json
+{
+  "status": "thinking",
+  "message": "Understanding your PLM request...",
+  "tool": null,
+  "args": null
+}
+```
 
-The command workflow implemented in server/command-graph.js follows a prioritized, short-circuit pipeline. The diagram below summarizes the main nodes and the decision flow (Mermaid):
+### Model Context Protocol (stdio)
+
+A lightweight MCP-compatible server runs alongside the HTTP server, implementing:
+- **ListTools** — Returns all available PLM tools
+- **CallTool** — Executes a named tool with provided arguments
+
+External controllers can discover and invoke tools via the MCP interface.
+
+## LangGraph Node Diagram
+
+The command workflow implemented in `server/command-graph.js` follows a prioritized, intelligent pipeline:
 
 ```mermaid
 flowchart TD
-  A[Receive user message] --> B[detect_reset]
-  B -- reset detected --> G[dispatch reset_scene]
-  B -- no reset --> C[clarify?]
-  C -- ambiguous --> H[return clarification]
-  C -- clear --> D[plan_explicit / local parsing]
-  D -- match (local) --> G
-  D -- no match --> E[plan_llm]
-  E --> F[LLM -> tool_calls]
-  F --> G[dispatch executedTools]
-  E -- error / no tools --> D[re-run local parsing as fallback]
-  G --> I[send to browser preview (WebSocket)]
+  START([Start]) --> A[detect_reset]
+  
+  A -->|Reset detected| B[dispatch]
+  A -->|No reset| C[clarify]
+  
+  C -->|Ambiguous request| END1([Return Clarification])
+  C -->|Clear intent| D[plan_llm]
+  
+  D -->|LLM success| B
+  D -->|LLM failed/no tools| E[fallback]
+  
+  E --> B
+  
+  B -->|Execute all actions| F[dispatch actions via MCP]
+  F -->|Send to browser| G[WebSocket → Three.js]
+  
+  B --> END2([End])
+  
+  style START fill:#90EE90
+  style END1 fill:#FFB6C6
+  style END2 fill:#87CEEB
+  style A fill:#FFE4B5
+  style C fill:#FFE4B5
+  style D fill:#DDA0DD
+  style E fill:#F0E68C
+  style B fill:#FFA07A
+  style F fill:#87CEEB
+  style G fill:#87CEEB
 ```
 
-If you prefer a static SVG export of this node diagram, I can add docs/langgraph-nodes.svg to the repo.
+### Detailed Node Descriptions
 
-Implementation notes
+| Node | Purpose | Key Actions |
+|------|---------|------------|
+| **detect_reset** | Fast-path for reset requests | Detects "reset" or "clear" keywords; short-circuits to dispatch if found |
+| **clarify** | Ambiguity resolution | Asks follow-up questions for unclear intents; returns clarification or proceeds to LLM |
+| **plan_llm** | LLM-based planning | Discovers MCP tools dynamically, sends user request + tools to LLM, extracts tool_calls |
+| **fallback** | Local intent parsing | Uses regex/keyword matching from `intent.js` if LLM fails or returns no tools |
+| **dispatch** | Tool execution | Iterates through executedTools, calls MCP client for each, collects results |
 
-- Local parsing (server/intent.js) is the fast, deterministic path used for camera manipulations, resets, and other simple commands.
-- LLM planning: TOOL_DEFINITIONS in `server/tools.js` are translated to function-style descriptors for the LLM so the model can return structured tool_calls. Those tool_calls are validated and mapped to browser actions before dispatch.
-- Dispatching: Executed tools are sent to the browser preview via WebSocket. If the preview is not connected, the server returns the actions in the response and includes a dispatch warning.
+### Data Flow
 
-Runtime configuration (defaults & env names)
+```
+User Message
+    ↓
+[detect_reset]  ← Fast local check
+    ↓
+[clarify]       ← Ambiguity detection
+    ↓
+[plan_llm]      ← Dynamic MCP tool discovery
+    ├─ List MCP tools
+    ├─ Convert to LLM function format
+    ├─ Call LLM with user message
+    └─ Extract tool_calls
+    ↓
+[dispatch]      ← Tool execution
+    ├─ For each executedTool:
+    │  ├─ Call MCP client
+    │  ├─ Collect result/error
+    │  └─ Send status to browser
+    └─ Return actions & results
+```
 
-- PORT — defaults to 8080
-- DEBUG — set in config.js (set to `false` to suppress debug logs)
-- MODEL_NAME / HUGGINGFACE_REPO_ID — defaults to `Qwen/Qwen2.5-7B-Instruct` in config
-- TEMPERATURE / HUGGINGFACE_TEMPERATURE — default 0.2
-- MAX_NEW_TOKENS / HUGGINGFACE_MAX_NEW_TOKENS — default 512
+## Implementation Notes
 
-File layout
+### Local Intent Parsing (`server/intent.js`)
 
-- server/
-  - index.js — Server entry point (HTTP + WebSocket + Model Context Protocol bindings)
-  - command-graph.js — LangGraph-based command/workflow construction (detect_reset -> clarify -> plan_llm -> fallback -> dispatch)
-  - intent.js — Local intent parsing and clarification helpers
-  - tools.js — Definitions of browser-facing tools (names, JSON input schemas)
-  - browser-bridge.js — WebSocket bridge utilities to send actions to the browser
-  - config.js — Runtime configuration (model name, temperature, token limits)
-- ui/
-  - index.html — UI entry page (Three.js canvas + chat controls)
-  - app.js — Three.js scene setup and tool handlers
-  - chat-ui.js — Chat UI and clarification controls
-  - styles.css — UI styling
-- server.js — Backward-compatible launcher
-- docs/architecture.svg — Architecture diagram
+Fast, deterministic pattern matching for common commands:
+- Camera manipulations (zoom, pan, rotate)
+- Reset requests (clear, reset, restore)
+- Preset camera views (isometric, top, front, etc.)
+- Part isolation and highlighting
 
-Contributing
+No LLM required for these operations — they execute instantly.
 
-PRs and issues welcome. If you'd like me to:
+### LLM Planning (`server/command-graph.js` / `plan_llm`)
 
-- export the LangGraph node diagram as an SVG and add it to docs/
-- add more code examples or a runtime sequence diagram
-- improve the UI instructions or add Docker/startup scripts
+1. **Dynamic Tool Discovery**: Calls `listMcpTools()` to get the latest available tools
+2. **Tool Format Conversion**: Converts MCP tool schemas to OpenAI function format
+3. **LLM Invocation**: Sends user message + tools to the LLM (Qwen by default)
+4. **Tool Call Extraction**: Parses the LLM response for `tool_calls` array
+5. **Fallback on Failure**: If LLM returns no tools or fails, switches to fallback parsing
 
-... tell me which one and I'll add it.
+### MCP Client Integration (`server/mcp-client.js`)
 
-License
+- Connects to the MCP server (stdio)
+- Implements `listMcpTools()` to discover available tools
+- Implements `callMcpTool(toolName, args)` to execute tools
+- Handles errors gracefully and returns results to the graph
+
+### Browser Bridge (`server/browser-bridge.js`)
+
+- Manages WebSocket connection to the browser UI
+- Sends actions as JSON arrays
+- Broadcasts agent status updates in real-time
+- Buffers actions if the browser is temporarily disconnected
+
+### Agent Status Updates
+
+Real-time status messages are sent to the browser throughout the workflow:
+
+| Status | When | Example Message |
+|--------|------|-----------------|
+| `thinking` | Planning in progress | "Understanding your PLM request..." |
+| `tool_selected` | Tool chosen | "Rotating the cube 45 degrees..." |
+| `executing` | Executing a tool | "Executing 1 operation..." |
+| `completed` | Tool/workflow finished | "All requested operations completed." |
+| `fallback` | Switched to fallback | "LLM planning failed. Using fallback..." |
+| `error` | Error occurred | "I couldn't determine the required operation." |
+| `clarification` | Asking for clarification | "Which part should I highlight?" |
+
+## Runtime Configuration
+
+All configuration options with defaults:
+
+```javascript
+// server/config.js
+PORT = process.env.PORT || 8080
+DEBUG = process.env.DEBUG !== 'false'
+MODEL_NAME = process.env.MODEL_NAME || process.env.HUGGINGFACE_REPO_ID || 'Qwen/Qwen2.5-7B-Instruct'
+TEMPERATURE = process.env.TEMPERATURE || process.env.HUGGINGFACE_TEMPERATURE || 0.2
+MAX_NEW_TOKENS = process.env.MAX_NEW_TOKENS || process.env.HUGGINGFACE_MAX_NEW_TOKENS || 512
+```
+
+## Project Structure
+
+```
+plm_mcp_server/
+├── server/
+│   ├── index.js              ← Server entry point (HTTP + WebSocket + MCP)
+│   ├── command-graph.js      ← LangGraph workflow definition
+│   ├── intent.js             ← Local intent parsing & clarification
+│   ├── tools.js              ← Tool definitions for MCP & LLM
+│   ├── browser-bridge.js     ← WebSocket bridge to browser
+│   ├── mcp-client.js         ← MCP client (stdio) for tool discovery/execution
+│   └── config.js             ← Runtime configuration
+│
+├── ui/
+│   ├── index.html            ← Browser entry page
+│   ├── app.js                ← Three.js scene setup & tool execution
+│   ├── chat-ui.js            ← Chat UI & clarification handlers
+│   └── styles.css            ← UI styling
+│
+├── package.json              ← Dependencies & scripts
+├── server.js                 ← Backward-compatible launcher
+└── README.md                 ← This file
+```
+
+## Key Dependencies
+
+- **@langchain/langgraph** `^1.4.9` — LangGraph workflow orchestration
+- **openai** `^7.4.0` — OpenAI-compatible LLM client (HuggingFace router)
+- **@modelcontextprotocol/sdk** `^1.30.0` — MCP server & client implementations
+- **ws** `^8.21.2` — WebSocket server for browser communication
+- **@huggingface/inference** `^4.13.25` — HuggingFace model inference
+- **dotenv** `^17.4.2` — Environment variable management
+
+## Workflow Examples
+
+### Example 1: Reset Request (Fast Path)
+
+```
+User: "Reset"
+  ↓
+[detect_reset] → Matches "reset" pattern
+  ↓
+[dispatch] → Sends reset_scene action
+  ↓
+Browser: Scene resets
+```
+
+### Example 2: Ambiguous Request
+
+```
+User: "Rotate 45"
+  ↓
+[detect_reset] → No match
+  ↓
+[clarify] → Detects ambiguity
+  ↓
+Returns: "Which axis: X, Y, or Z?"
+```
+
+### Example 3: LLM-Based Planning
+
+```
+User: "Find parts related to assembly A"
+  ↓
+[detect_reset] → No match
+  ↓
+[clarify] → Clear intent
+  ↓
+[plan_llm] → Discovers MCP tools
+  → Calls LLM with user message + tools
+  → LLM returns: tool_calls=[{name: "find_related_parts", args: {...}}]
+  ↓
+[dispatch] → Calls MCP tool
+  ↓
+Browser: Displays related parts
+```
+
+### Example 4: LLM Failure → Fallback
+
+```
+User: "Show me the assembly"
+  ↓
+[detect_reset] → No match
+  ↓
+[clarify] → Clear intent
+  ↓
+[plan_llm] → LLM returns no tools
+  ↓
+[fallback] → Local parsing succeeds (matches "show" → set_camera_view)
+  ↓
+[dispatch] → Sends camera view action
+  ↓
+Browser: Camera changes
+```
+
+## Usage Tips
+
+1. **Fast Commands**: Use simple, direct language for camera controls and resets.
+   - "Reset", "Zoom in", "Front view", "Isometric"
+
+2. **Complex Queries**: Be descriptive for LLM planning.
+   - "Find all parts related to the motor assembly"
+   - "Create a cross-section along the XY plane"
+   - "Highlight components from supplier A"
+
+3. **Debugging**: Enable debug logs to see the LangGraph workflow in action.
+   - Set `DEBUG=true` in `.env` or as an environment variable
+   - Check browser console and server console for status messages
+
+4. **Tool Discovery**: The LLM dynamically discovers available tools from the MCP server.
+   - No hardcoded tool list — add new tools to the MCP server and the LLM will see them
+
+## Architecture Diagram
+
+```
+┌─────────────┐
+│   Browser   │
+│  (Three.js) │
+└──────┬──────┘
+       │ WebSocket
+       │
+┌──────▼─────────────────────┐
+│      HTTP Server           │
+│  ┌──────────────────────┐  │
+│  │   LangGraph Workflow │  │
+│  │ (command-graph.js)   │  │
+│  └───────┬──────────────┘  │
+│          │                  │
+│    ┌─────▼──────┐          │
+│    │  MCP Client│          │
+│    └─────┬──────┘          │
+└─────────┼─────────────────┘
+          │ stdio
+          │
+    ┌─────▼──────────────┐
+    │   MCP Server       │
+    │ (tool definitions) │
+    └────────────────────┘
+```
+
+## Contributing
+
+PRs and issues welcome! Some potential enhancements:
+
+- [ ] Add streaming support for long-running operations
+- [ ] Implement persistent session history
+- [ ] Add Docker configuration for easy deployment
+- [ ] Create more sophisticated clarification strategies
+- [ ] Support for multiple concurrent browser connections
+- [ ] Add telemetry and analytics
+
+## License
 
 MIT
