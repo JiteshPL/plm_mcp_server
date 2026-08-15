@@ -2,7 +2,7 @@
 
 A lightweight HTTP/WebSocket server and browser UI for interactive multi-command planning (MCP) with a Three.js preview.
 
-This project implements a small MCP runtime that accepts natural-language commands, plans actions using a LangGraph-based command workflow (local parsing first, then optional LLM planning), and dispatches executable actions to a browser-based 3D CAD visualization powered by Three.js.
+This project implements a small MCP runtime that accepts natural-language commands, plans actions using a LangGraph-based command workflow (local parsing first, then optional LLM planning), and dispatches executable actions to a browser preview.
 
 ## Highlights
 
@@ -152,17 +152,19 @@ flowchart TD
   
   B --> END2([End])
   
-  style START fill:#90EE90
-  style END1 fill:#FFB6C6
-  style END2 fill:#87CEEB
-  style A fill:#FFE4B5
-  style C fill:#FFE4B5
-  style D fill:#DDA0DD
-  style E fill:#F0E68C
-  style B fill:#FFA07A
-  style F fill:#87CEEB
-  style G fill:#87CEEB
+  style START fill:#90EE90, color:#000000, stroke:#333
+  style END1 fill:#FFB6C6, color:#000000, stroke:#333
+  style END2 fill:#87CEEB, color:#000000, stroke:#333
+  style A fill:#FFE4B5, color:#000000, stroke:#333
+  style C fill:#FFE4B5, color:#000000, stroke:#333
+  style D fill:#DDA0DD, color:#000000, stroke:#333
+  style E fill:#F0E68C, color:#000000, stroke:#333
+  style B fill:#FFA07A, color:#000000, stroke:#333
+  style F fill:#87CEEB, color:#000000, stroke:#333
+  style G fill:#87CEEB, color:#000000, stroke:#333
 ```
+
+> Note: node text color has been set to black (`color:#000000`) to ensure readability across different backgrounds — this addresses readability issues when white text was used against light fills.
 
 ### Detailed Node Descriptions
 
@@ -277,9 +279,11 @@ plm_mcp_server/
 │   ├── chat-ui.js            ← Chat UI & clarification handlers
 │   └── styles.css            ← UI styling
 │
+├── .env.example              ← Example environment variables
 ├── package.json              ← Dependencies & scripts
 ├── server.js                 ← Backward-compatible launcher
-└── README.md                 ← This file
+├── README.md                 ← This file
+└── LICENSE                   ← License (MIT)
 ```
 
 ## Key Dependencies
