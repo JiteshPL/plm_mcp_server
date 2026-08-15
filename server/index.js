@@ -64,13 +64,25 @@ const httpServer = http.createServer((req, res) => {
       res.writeHead(200, {
         "Content-Type": "application/json"
       });
-      res.end(JSON.stringify(result.clarification ? {
-        ...result.clarification,
-        executedTools: []
-      } : {
-        reply: result.reply,
-        executedTools: result.executedTools
-      }));
+
+      const clarification = result.clarification;
+
+      res.end(
+        JSON.stringify(
+          clarification
+            ? {
+                reply: "Please choose an option below.",
+                choices: Array.isArray(clarification.choices)
+                  ? clarification.choices
+                  : [],
+                executedTools: [],
+              }
+            : {
+                reply: result.reply,
+                executedTools: result.executedTools,
+              },
+        ),
+      );
     } catch (error) {
       console.error("API Error:", error);
       res.writeHead(500, {

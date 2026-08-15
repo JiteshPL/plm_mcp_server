@@ -42,11 +42,11 @@ export function getClarification(text) {
   const asksToHighlight = lower.includes("highlight") || lower.includes("vendor") || lower.includes("supplier");
   const hasSupplier = /\bvendor[\s-]?[abc]\b/i.test(text);
   const hasColor = /#[0-9a-f]{3,8}\b/i.test(text) || COLOR_OPTIONS.some(([color]) => lower.includes(color.toLowerCase()));
-  if (asksToHighlight && !hasSupplier) return { reply: "Which vendor's parts should I highlight?", choices: ["Vendor-A", "Vendor-B", "Vendor-C"].map(vendor => ({ label: vendor, message: `${text} from ${vendor}` })) };
-  if (asksToHighlight && !hasColor) return { reply: "Which highlight color would you like?", choices: COLOR_OPTIONS.map(([label, hex]) => ({ label, message: `${text} with color ${hex}` })) };
+  if (asksToHighlight && !hasSupplier) return { reply: "Please choose a vendor to continue.", choices: ["Vendor-A", "Vendor-B", "Vendor-C"].map(vendor => ({ label: vendor, message: `${text} from ${vendor}` })) };
+  if (asksToHighlight && !hasColor) return { reply: "Please choose a highlight color to continue.", choices: COLOR_OPTIONS.map(([label, hex]) => ({ label, message: `${text} with color ${hex}` })) };
 
   const views = ["isometric", "top", "bottom", "front", "right"];
-  if (/\b(view|camera)\b/.test(lower) && !views.some(view => lower.includes(view))) return { reply: "Which camera view would you like?", choices: views.map(view => ({ label: view[0].toUpperCase() + view.slice(1), message: `${text} with ${view} view` })) };
+  if (/\b(view|camera)\b/.test(lower) && !views.some(view => lower.includes(view))) return { reply: "Please choose a camera view to continue.", choices: views.map(view => ({ label: view[0].toUpperCase() + view.slice(1), message: `${text} with ${view} view` })) };
   return null;
 }
 
