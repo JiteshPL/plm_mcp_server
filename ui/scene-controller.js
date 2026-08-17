@@ -85,7 +85,7 @@ const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 2);
 const partsRegistry = [];
 const loader = new GLTFLoader();
 const MODEL_URL =
-  "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/Buggy/glTF-Binary/Buggy.glb";
+  "/models/Buggy.glb";
 
 function focusOnParts(mesh) {
   const box = new THREE.Box3().setFromObject(mesh);
